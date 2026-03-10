@@ -34,7 +34,6 @@ jobs:
 
       - name: Type check (mypy)
         run: mypy registry subnet --ignore-missing-imports
-        continue-on-error: true
 
       - name: Run tests
         run: pytest tests/ -v --tb=short --cov=registry --cov=sdk --cov=cli --cov-report=xml
@@ -82,6 +81,67 @@ jobs:
       - name: Stop services
         if: always()
         run: docker compose down -v
+
+  rust:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: prover
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            prover/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('prover/Cargo.lock', 'prover/Cargo.toml') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: Check compilation
+        run: cargo check --all-features
+
+      - name: Lint (clippy)
+        run: cargo clippy --all-features -- -D warnings
+
+      - name: Format check
+        run: cargo fmt --check
+
+      - name: Run tests
+        run: cargo test --all-features
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
 
   frontend:
     runs-on: ubuntu-latest
