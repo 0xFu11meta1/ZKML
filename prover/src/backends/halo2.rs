@@ -237,7 +237,7 @@ fn halo2_prove_inner(
     // Evaluate advice polynomials at challenge point
     let advice_evals: Vec<Vec<u8>> = advice_polys_lagrange
         .iter()
-        .map(|vals| {
+        .map(|vals: &Vec<Fp>| {
             let eval = vals.first().copied().unwrap_or(Fp::ZERO);
             eval.to_repr().as_ref().to_vec()
         })
