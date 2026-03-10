@@ -242,3 +242,141 @@ class TestNetworkStats:
         with patch.object(c, "_get_http", return_value=mock_http):
             with pytest.raises(ServerError):
                 c.get_network_stats()
+
+
+# ── get_prover ───────────────────────────────────────────────
+
+class TestGetProver:
+    def test_success(self):
+        data = {"hotkey": "5FM1", "gpu_name": "RTX 4090", "online": True}
+        c, mock_http = _client_with_mock(_mock_response(json_data=data))
+        with patch.object(c, "_get_http", return_value=mock_http):
+            result = c.get_prover("5FM1")
+        assert result["hotkey"] == "5FM1"
+        url = mock_http.request.call_args[0][1]
+        assert url.endswith("/provers/5FM1")
+
+    def test_not_found(self):
+        c, mock_http = _client_with_mock(
+            _mock_response(status_code=404, json_data={"detail": "not found"})
+        )
+        with patch.object(c, "_get_http", return_value=mock_http):
+            with pytest.raises(NotFoundError):
+                c.get_prover("5FGhost")
+
+
+# ── register_prover ──────────────────────────────────────────
+
+class TestRegisterProver:
+    def test_success(self):
+        data = {"hotkey": "5FM1", "gpu_backend": "cuda", "online": True}
+        c, mock_http = _client_with_mock(
+            _mock_response(json_data=data), hotkey="5FM1",
+        )
+        with patch.object(c, "_get_http", return_value=mock_http):
+            result = c.register_prover(gpu_backend="cuda", gpu_name="RTX 4090")
+        assert result["hotkey"] == "5FM1"
+        call_kwargs = mock_http.request.call_args.kwargs
+        assert call_kwargs["json"]["gpu_backend"] == "cuda"
+
+
+# ── ping_prover ──────────────────────────────────────────────
+
+class TestPingProver:
+    def test_success(self):
+        data = {"status": "ok"}
+        c, mock_http = _client_with_mock(
+            _mock_response(json_data=data), hotkey="5FM1",
+        )
+        with patch.object(c, "_get_http", return_value=mock_http):
+            result = c.ping_prover(vram_available_bytes=1024)
+        assert result["status"] == "ok"
+        params = mock_http.request.call_args.kwargs.get("params", {})
+        assert params["vram_available_bytes"] == 1024
+
+
+# ── get_proof ────────────────────────────────────────────────
+
+class TestGetProof:
+    def test_success(self):
+        data = {"id": 42, "proof_hash": "abc123", "verified": False}
+        c, mock_http = _client_with_mock(_mock_response(json_data=data))
+        with patch.object(c, "_get_http", return_value=mock_http):
+            result = c.get_proof(42)
+        assert result["id"] == 42
+        url = mock_http.request.call_args[0][1]
+        assert url.endswith("/proofs/42")
+
+    def test_not_found(self):
+        c, mock_http = _client_with_mock(
+            _mock_response(status_code=404, json_data={"detail": "not found"})
+        )
+        with patch.object(c, "_get_http", return_value=mock_http):
+            with pytest.raises(NotFoundError):
+                c.get_proof(999)
+
+
+# ── list_proofs ──────────────────────────────────────────────
+
+class TestListProofs:
+    def test_basic(self):
+        data = {"items": [], "total": 0, "page": 1, "page_size": 20}
+        c, mock_http = _client_with_mock(_mock_response(json_data=data))
+        with patch.object(c, "_get_http", return_value=mock_http):
+            result = c.list_proofs()
+        assert result["total"] == 0
+
+    def test_with_filters(self):
+        data = {"items": [{"id": 1}], "total": 1, "page": 1, "page_size": 10}
+        c, mock_http = _client_with_mock(_mock_response(json_data=data))
+        with patch.object(c, "_get_http", return_value=mock_http):
+            c.list_proofs(circuit_id=5, verified=True, page_size=10)
+        params = mock_http.request.call_args.kwargs.get("params", {})
+        assert params["circuit_id"] == 5
+        assert params["verified"] == "true"
+
+
+# ── get_job_partitions ───────────────────────────────────────
+
+class TestGetJobPartitions:
+    def test_success(self):
+        data = [{"partition_index": 0, "status": "completed"}, {"partition_index": 1, "status": "proving"}]
+        c, mock_http = _client_with_mock(_mock_response(json_data=data))
+        with patch.object(c, "_get_http", return_value=mock_http):
+            result = c.get_job_partitions("abc123")
+        assert len(result) == 2
+        url = mock_http.request.call_args[0][1]
+        assert "/proofs/jobs/abc123/partitions" in url
+
+
+# ── list_my_orgs ─────────────────────────────────────────────
+
+class TestListMyOrgs:
+    def test_success(self):
+        data = [{"id": 1, "slug": "my-org", "name": "My Org"}]
+        c, mock_http = _client_with_mock(
+            _mock_response(json_data=data), hotkey="5FUser",
+        )
+        with patch.object(c, "_get_http", return_value=mock_http):
+            result = c.list_my_orgs()
+        assert len(result) == 1
+        assert result[0]["slug"] == "my-org"
+
+
+# ── get_org ──────────────────────────────────────────────────
+
+class TestGetOrg:
+    def test_success(self):
+        data = {"id": 1, "slug": "test-org", "name": "Test Org"}
+        c, mock_http = _client_with_mock(_mock_response(json_data=data))
+        with patch.object(c, "_get_http", return_value=mock_http):
+            result = c.get_org("test-org")
+        assert result["slug"] == "test-org"
+
+    def test_not_found(self):
+        c, mock_http = _client_with_mock(
+            _mock_response(status_code=404, json_data={"detail": "not found"})
+        )
+        with patch.object(c, "_get_http", return_value=mock_http):
+            with pytest.raises(NotFoundError):
+                c.get_org("nonexistent")
