@@ -10,8 +10,8 @@ COPY prover/Cargo.toml prover/Cargo.lock* ./
 COPY prover/src/ src/
 
 # Build the prover library (release mode, default features only for base image)
-RUN cargo build --release --lib 2>/dev/null || true
-# The compiled .so will be at /prover/target/release/libmodelio_prover.so (if available)
+RUN cargo build --release --lib
+# The compiled .so will be at /prover/target/release/libmodelio_prover.so
 
 # ── Stage 1: Python backend ──────────────────────────────────
 FROM python:3.11-slim AS backend
@@ -27,10 +27,10 @@ COPY prover/python/ prover/python/
 
 RUN pip install --no-cache-dir .
 
-# Copy compiled Rust prover library if build succeeded
+# Copy compiled Rust prover library (optional — non-GPU builds may skip)
 RUN --mount=from=prover-builder,source=/prover/target/release,target=/tmp/prover-build \
-    cp /tmp/prover-build/*.so /usr/local/lib/ 2>/dev/null; \
-    ldconfig || true
+    cp /tmp/prover-build/*.so /usr/local/lib/ 2>/dev/null || echo "No prover .so found — continuing without native prover"; \
+    ldconfig
 
 # ── Stage 2: Frontend build (optional, for standalone) ───────
 FROM node:20-alpine AS frontend
@@ -57,8 +57,8 @@ COPY --from=backend /app /app
 
 # Copy Rust prover shared library if available
 RUN --mount=from=backend,source=/usr/local/lib,target=/tmp/backend-lib \
-    cp /tmp/backend-lib/*.so /usr/local/lib/ 2>/dev/null; \
-    ldconfig || true
+    cp /tmp/backend-lib/*.so /usr/local/lib/ 2>/dev/null || echo "No prover .so — continuing without native prover"; \
+    ldconfig
 
 COPY docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
