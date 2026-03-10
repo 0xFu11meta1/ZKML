@@ -85,6 +85,7 @@ pub fn detect_devices() -> Option<Vec<GpuDevice>> {
 
 /// Run MSM (Multi-Scalar Multiplication) on CUDA via ICICLE.
 /// This is the core GPU-accelerated operation for ZK proof generation.
+/// Computes: result = Σ scalars[i] · points[i] (elliptic curve multi-scalar multiplication)
 #[cfg(feature = "cuda")]
 pub fn cuda_msm(
     scalars: &[u8],
@@ -98,13 +99,74 @@ pub fn cuda_msm(
     icicle_cuda_runtime::device::set_device(device_index as i32)
         .map_err(|e| format!("Failed to set CUDA device {}: {:?}", device_index, e))?;
 
-    // Deserialize scalars and points, run MSM, serialize result
-    // This is the hot path for Groth16/PLONK proving
+    // Validate input sizes
+    let scalar_size = std::mem::size_of::<ScalarField>();
+    let point_size = std::mem::size_of::<G1Projective>();
+
+    if scalars.is_empty() || points.is_empty() {
+        return Err("empty scalars or points".to_string());
+    }
+
+    if scalars.len() % scalar_size != 0 {
+        return Err(format!(
+            "scalars buffer size {} not aligned to scalar size {}",
+            scalars.len(),
+            scalar_size
+        ));
+    }
+
+    let num_scalars = scalars.len() / scalar_size;
+    let num_points = points.len() / point_size;
+
+    if num_scalars != num_points {
+        return Err(format!(
+            "mismatched counts: {} scalars vs {} points",
+            num_scalars, num_points
+        ));
+    }
+
+    if result.len() < std::mem::size_of::<G1Projective>() {
+        return Err(format!(
+            "result buffer too small: {} bytes (need {})",
+            result.len(),
+            std::mem::size_of::<G1Projective>()
+        ));
+    }
+
+    // Reinterpret buffers as typed slices
+    let scalars_typed: &[ScalarField] = unsafe {
+        std::slice::from_raw_parts(scalars.as_ptr() as *const ScalarField, num_scalars)
+    };
+
+    let points_typed: &[G1Projective] = unsafe {
+        std::slice::from_raw_parts(points.as_ptr() as *const G1Projective, num_points)
+    };
+
+    // Configure MSM
+    let cfg = msm::MSMConfig::default();
+
+    // Run MSM on GPU
+    let mut msm_result = vec![G1Projective::default(); 1];
+    msm::msm(scalars_typed, points_typed, &cfg, &mut msm_result)
+        .map_err(|e| format!("CUDA MSM failed: {:?}", e))?;
+
+    // Copy result back
+    let result_bytes: &[u8] = unsafe {
+        std::slice::from_raw_parts(
+            &msm_result[0] as *const G1Projective as *const u8,
+            std::mem::size_of::<G1Projective>(),
+        )
+    };
+
+    let copy_len = result.len().min(result_bytes.len());
+    result[..copy_len].copy_from_slice(&result_bytes[..copy_len]);
+
     Ok(())
 }
 
 /// Run NTT (Number Theoretic Transform) on CUDA via ICICLE.
-/// Used for polynomial evaluation in PLONK and STARKs.
+/// Used for polynomial evaluation/interpolation in PLONK and STARKs.
+/// When `inverse` is true, performs inverse NTT (interpolation).
 #[cfg(feature = "cuda")]
 pub fn cuda_ntt(
     coefficients: &[u8],
@@ -117,6 +179,66 @@ pub fn cuda_ntt(
 
     icicle_cuda_runtime::device::set_device(device_index as i32)
         .map_err(|e| format!("Failed to set CUDA device {}: {:?}", device_index, e))?;
+
+    let element_size = std::mem::size_of::<ScalarField>();
+
+    if coefficients.is_empty() {
+        return Err("empty coefficients buffer".to_string());
+    }
+
+    if coefficients.len() % element_size != 0 {
+        return Err(format!(
+            "coefficients buffer size {} not aligned to element size {}",
+            coefficients.len(),
+            element_size
+        ));
+    }
+
+    let n = coefficients.len() / element_size;
+    if !n.is_power_of_two() {
+        return Err(format!("NTT size {} must be a power of two", n));
+    }
+
+    if result.len() < coefficients.len() {
+        return Err(format!(
+            "result buffer too small: {} bytes (need {})",
+            result.len(),
+            coefficients.len()
+        ));
+    }
+
+    // Reinterpret as typed slice
+    let input: &[ScalarField] = unsafe {
+        std::slice::from_raw_parts(coefficients.as_ptr() as *const ScalarField, n)
+    };
+
+    // Initialize NTT domain with the root of unity for this size
+    ntt::initialize_domain(
+        ntt::get_root_of_unity::<ScalarField>(n as u64),
+        &ntt::NTTInitDomainConfig::default(),
+    )
+    .map_err(|e| format!("NTT domain init failed: {:?}", e))?;
+
+    // Configure NTT direction
+    let direction = if inverse {
+        ntt::NTTDir::kInverse
+    } else {
+        ntt::NTTDir::kForward
+    };
+
+    let cfg = ntt::NTTConfig::<ScalarField>::default();
+    let mut output = vec![ScalarField::default(); n];
+
+    ntt::ntt(input, direction, &cfg, &mut output)
+        .map_err(|e| format!("CUDA NTT failed: {:?}", e))?;
+
+    // Copy result back to byte buffer
+    let output_bytes: &[u8] = unsafe {
+        std::slice::from_raw_parts(output.as_ptr() as *const u8, n * element_size)
+    };
+
+    let copy_len = result.len().min(output_bytes.len());
+    result[..copy_len].copy_from_slice(&output_bytes[..copy_len]);
 
     Ok(())
 }

@@ -43,14 +43,22 @@ impl ProverBackend for Groth16Backend {
             use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
             use ark_relations::r1cs::ConstraintSynthesizer;
             use ark_std::rand::thread_rng;
+            use ark_snark::SNARK;
 
             // Deserialize the proving key from circuit data
             let pk = ark_groth16::ProvingKey::<Bn254>::deserialize_compressed(&circuit.proving_key[..])
                 .map_err(|e| ProverError::SerializationError(format!("Failed to deserialize proving key: {}", e)))?;
 
-            // Deserialize witness assignments
-            let assignments: Vec<Fr> = bincode::deserialize(&witness.assignments)
-                .map_err(|e| ProverError::SerializationError(format!("Failed to deserialize witness: {}", e)))?;
+            // Deserialize witness assignments using ark_serialize
+            let mut reader = std::io::Cursor::new(&witness.assignments);
+            let num_assignments = u64::deserialize_compressed(&mut reader)
+                .map_err(|e| ProverError::SerializationError(format!("Failed to read assignment count: {}", e)))? as usize;
+            let mut assignments = Vec::with_capacity(num_assignments);
+            for _ in 0..num_assignments {
+                let elem = Fr::deserialize_compressed(&mut reader)
+                    .map_err(|e| ProverError::SerializationError(format!("Failed to deserialize Fr: {}", e)))?;
+                assignments.push(elem);
+            }
 
             // Create proof using Groth16
             let rng = &mut thread_rng();
@@ -97,7 +105,7 @@ impl ProverBackend for Groth16Backend {
             use ark_bn254::{Bn254, Fr};
             use ark_groth16::{Groth16, PreparedVerifyingKey};
             use ark_serialize::CanonicalDeserialize;
-            use ark_std::rand::thread_rng;
+            use ark_snark::SNARK;
 
             let vk = ark_groth16::VerifyingKey::<Bn254>::deserialize_compressed(&circuit.verification_key[..])
                 .map_err(|e| ProverError::SerializationError(format!("Failed to deserialize vk: {}", e)))?;
@@ -106,8 +114,15 @@ impl ProverBackend for Groth16Backend {
             let groth16_proof = ark_groth16::Proof::<Bn254>::deserialize_compressed(&proof.data[..])
                 .map_err(|e| ProverError::SerializationError(format!("Failed to deserialize proof: {}", e)))?;
 
-            let inputs: Vec<Fr> = bincode::deserialize(public_inputs)
-                .map_err(|e| ProverError::SerializationError(format!("Failed to deserialize inputs: {}", e)))?;
+            let mut input_reader = std::io::Cursor::new(public_inputs);
+            let num_inputs = u64::deserialize_compressed(&mut input_reader)
+                .map_err(|e| ProverError::SerializationError(format!("Failed to read input count: {}", e)))? as usize;
+            let mut inputs = Vec::with_capacity(num_inputs);
+            for _ in 0..num_inputs {
+                let elem = Fr::deserialize_compressed(&mut input_reader)
+                    .map_err(|e| ProverError::SerializationError(format!("Failed to deserialize input Fr: {}", e)))?;
+                inputs.push(elem);
+            }
 
             let valid = Groth16::<Bn254>::verify_with_processed_vk(&pvk, &inputs, &groth16_proof)
                 .map_err(|e| ProverError::VerificationFailed(format!("Verification error: {}", e)))?;
@@ -155,7 +170,7 @@ impl ark_relations::r1cs::ConstraintSynthesizer<ark_bn254::Fr> for R1CSCircuit {
         // is a linear combination triple (A, B, C).
         let data = &self.r1cs_data;
         if data.len() < 8 {
-            return Err(SynthesisError::Unsatisfied);
+            return Err(SynthesisError::AssignmentMissing);
         }
 
         // Allocate witness variables
