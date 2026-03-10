@@ -273,3 +273,72 @@ class ModelionnClient:
         """Get network-wide prover statistics."""
         resp = self._request_with_retry("GET", f"{self._url}/provers/stats")
         return resp.json()
+
+    def get_prover(self, hotkey: str) -> dict[str, Any]:
+        """Get prover details by hotkey."""
+        resp = self._request_with_retry("GET", f"{self._url}/provers/{hotkey}")
+        return resp.json()
+
+    def register_prover(self, **capabilities: Any) -> dict[str, Any]:
+        """Register this node as a prover with its GPU capabilities."""
+        resp = self._request_with_retry(
+            "POST",
+            f"{self._url}/provers/register",
+            params={"hotkey": self._hotkey},
+            json=capabilities,
+            headers=self._auth_headers(),
+        )
+        return resp.json()
+
+    def ping_prover(self, *, vram_available_bytes: int = 0) -> dict[str, Any]:
+        """Send a heartbeat ping to keep prover online."""
+        resp = self._request_with_retry(
+            "POST",
+            f"{self._url}/provers/ping",
+            params={"hotkey": self._hotkey, "vram_available_bytes": vram_available_bytes},
+            headers=self._auth_headers(),
+        )
+        return resp.json()
+
+    # ── ZK Proofs ────────────────────────────────────────────
+
+    def get_proof(self, proof_id: int) -> dict[str, Any]:
+        """Get proof details by ID."""
+        resp = self._request_with_retry("GET", f"{self._url}/proofs/{proof_id}")
+        return resp.json()
+
+    def list_proofs(
+        self,
+        *,
+        circuit_id: int | None = None,
+        verified: bool | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, Any]:
+        """List generated proofs with optional filters."""
+        params: dict[str, Any] = {"page": page, "page_size": page_size}
+        if circuit_id is not None:
+            params["circuit_id"] = circuit_id
+        if verified is not None:
+            params["verified"] = str(verified).lower()
+        resp = self._request_with_retry("GET", f"{self._url}/proofs", params=params)
+        return resp.json()
+
+    def get_job_partitions(self, task_id: str) -> list[dict[str, Any]]:
+        """Get partition-level status for a proof job."""
+        resp = self._request_with_retry("GET", f"{self._url}/proofs/jobs/{task_id}/partitions")
+        return resp.json()
+
+    # ── Organizations ────────────────────────────────────────
+
+    def list_my_orgs(self) -> list[dict[str, Any]]:
+        """List organizations the authenticated user belongs to."""
+        resp = self._request_with_retry(
+            "GET", f"{self._url}/orgs/me", headers=self._auth_headers(),
+        )
+        return resp.json()
+
+    def get_org(self, slug: str) -> dict[str, Any]:
+        """Get organization by slug."""
+        resp = self._request_with_retry("GET", f"{self._url}/orgs/{slug}")
+        return resp.json()
