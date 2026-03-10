@@ -8,6 +8,11 @@ from httpx import AsyncClient
 
 # ── Helpers ──────────────────────────────────────────────────
 
+# Valid CIDv0: Qm + 44 base58 chars
+_VALID_CID = "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG"
+_VALID_WITNESS_CID = "QmT5NvUtoM5nWFfrQnVFwHvBpiFkHjbGEhYbTnTEt5aYrj"
+
+
 async def _create_circuit(client: AsyncClient, **overrides) -> dict:
     defaults = {
         "name": "bench-circuit",
@@ -15,7 +20,7 @@ async def _create_circuit(client: AsyncClient, **overrides) -> dict:
         "proof_type": "groth16",
         "circuit_type": "general",
         "num_constraints": 50000,
-        "ipfs_cid": "QmCircuitData123",
+        "ipfs_cid": _VALID_CID,
     }
     defaults.update(overrides)
     resp = await client.post("/circuits?hotkey=5FPublisher", json=defaults)
@@ -26,7 +31,7 @@ async def _create_circuit(client: AsyncClient, **overrides) -> dict:
 def _proof_request(circuit_id: int, **overrides) -> dict:
     defaults = {
         "circuit_id": circuit_id,
-        "witness_cid": "QmWitnessCid123",
+        "witness_cid": _VALID_WITNESS_CID,
     }
     defaults.update(overrides)
     return defaults
@@ -70,7 +75,7 @@ class TestRequestProof:
             client,
             name="large-circ",
             num_constraints=50_000_000,
-            ipfs_cid="QmLarge",
+            ipfs_cid="QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn",
         )
         resp = await client.post(
             "/proofs/jobs?hotkey=5FReq",
@@ -112,10 +117,15 @@ class TestListProofJobs:
 
     async def test_list_with_data(self, client: AsyncClient):
         circuit = await _create_circuit(client)
+        witness_cids = [
+            "QmSsw6EcnwEiTT9c4rnAGeSENvsJMepNHmbrgi2S9bXNjm",
+            "QmbWqxBEKC3P8tqsKc98xmWNzrzDtRLMiMPL8wBuTGsMnR",
+            "QmTzQ1JRkWErjk39mryYw2WVaphAZNAREyMchXzYQ7c15n",
+        ]
         for i in range(3):
             await client.post(
                 f"/proofs/jobs?hotkey=5FReq{i}",
-                json=_proof_request(circuit["id"], witness_cid=f"QmW{i}"),
+                json=_proof_request(circuit["id"], witness_cid=witness_cids[i]),
             )
         resp = await client.get("/proofs/jobs")
         data = resp.json()
@@ -126,11 +136,11 @@ class TestListProofJobs:
         circuit = await _create_circuit(client)
         await client.post(
             "/proofs/jobs?hotkey=5FAlice",
-            json=_proof_request(circuit["id"], witness_cid="QmWA"),
+            json=_proof_request(circuit["id"], witness_cid="QmW2WQi7j6c7UgJTarActp7tDNikE4B2qXtFCfLPdsgaTQ"),
         )
         await client.post(
             "/proofs/jobs?hotkey=5FBob",
-            json=_proof_request(circuit["id"], witness_cid="QmWB"),
+            json=_proof_request(circuit["id"], witness_cid="QmRf22bZar3WKmojipms22PkXH1MZGmvsqzQtuSvQE3uhm"),
         )
         resp = await client.get("/proofs/jobs?requester=5FAlice")
         data = resp.json()
@@ -139,10 +149,17 @@ class TestListProofJobs:
 
     async def test_list_pagination(self, client: AsyncClient):
         circuit = await _create_circuit(client)
+        witness_page_cids = [
+            "QmVE7b6qVAPo93rG2Vj1zRz7WMXQ5YsMDMBqxfPniXMV5G",
+            "QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco",
+            "QmZTR5bcpQD7cFgTorqxZDYaew1Wqgfbd2ud9QqGPAkK2V",
+            "QmaozNR7DZHQK1ZcU9p7QdrshMvXqWK6gpu5rmrkPdT3L4",
+            "QmcRD4wkPPi6dig81r5sLj9Zm1gDCL4zgpEj9CfuRrGbzF",
+        ]
         for i in range(5):
             await client.post(
                 f"/proofs/jobs?hotkey=5FReq{i}",
-                json=_proof_request(circuit["id"], witness_cid=f"QmW{i}"),
+                json=_proof_request(circuit["id"], witness_cid=witness_page_cids[i]),
             )
         resp = await client.get("/proofs/jobs?page=1&page_size=2")
         data = resp.json()

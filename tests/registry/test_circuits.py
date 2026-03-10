@@ -8,6 +8,10 @@ from httpx import AsyncClient
 
 # ── Helpers ──────────────────────────────────────────────────
 
+# Valid CIDv0: Qm + 44 base58 chars
+_VALID_CID = "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG"
+
+
 def _circuit_payload(**overrides) -> dict:
     defaults = {
         "name": "test-circuit",
@@ -15,7 +19,7 @@ def _circuit_payload(**overrides) -> dict:
         "proof_type": "groth16",
         "circuit_type": "general",
         "num_constraints": 1000,
-        "ipfs_cid": "QmTestCid123456789",
+        "ipfs_cid": _VALID_CID,
     }
     defaults.update(overrides)
     return defaults
@@ -49,12 +53,12 @@ class TestUploadCircuit:
     async def test_upload_duplicate_name_version_409(self, client: AsyncClient):
         resp1 = await client.post(
             "/circuits?hotkey=5FPub",
-            json=_circuit_payload(ipfs_cid="QmDifferentCid1"),
+            json=_circuit_payload(ipfs_cid="QmT5NvUtoM5nWFfrQnVFwHvBpiFkHjbGEhYbTnTEt5aYrj"),
         )
         assert resp1.status_code == 201
         resp2 = await client.post(
             "/circuits?hotkey=5FPub",
-            json=_circuit_payload(ipfs_cid="QmDifferentCid2"),
+            json=_circuit_payload(ipfs_cid="QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn"),
         )
         assert resp2.status_code == 409
 
@@ -77,13 +81,19 @@ class TestUploadCircuit:
         assert resp.status_code == 422
 
     async def test_upload_all_proof_types(self, client: AsyncClient):
+        cids = [
+            "QmRKs2ZfuwvmZA3QAYisRC3Gn1PGejQFZp4CUpH3GNn3be",
+            "QmNhFMqaNsLNFEbMoiYXBVbwMgKLwnXSMijovGFmvDHMDL",
+            "QmPZ9gcCEpqKTo6aq61g2nXGUhM4iCL3ewB6LDXZCtioEB",
+            "QmQ7mBT4MMHcdjnhVDPcWNQGmfRfGNzLfxpYsmFr7FGAzj",
+        ]
         for i, pt in enumerate(["groth16", "plonk", "halo2", "stark"]):
             resp = await client.post(
                 "/circuits?hotkey=5FPub",
                 json=_circuit_payload(
                     name=f"circuit-{pt}",
                     proof_type=pt,
-                    ipfs_cid=f"QmCid{i}",
+                    ipfs_cid=cids[i],
                 ),
             )
             assert resp.status_code == 201
@@ -94,8 +104,8 @@ class TestUploadCircuit:
             "/circuits?hotkey=5FPub",
             json=_circuit_payload(
                 description="A complex circuit",
-                proving_key_cid="QmProvingKey",
-                verification_key_cid="QmVerifKey",
+                proving_key_cid="QmW2WQi7j6c7UgJTarActp7tDNikE4B2qXtFCfLPdsgaTQ",
+                verification_key_cid="QmRf22bZar3WKmojipms22PkXH1MZGmvsqzQtuSvQE3uhm",
                 size_bytes=4096,
                 tags=["ml", "zkml"],
                 num_public_inputs=5,
@@ -105,7 +115,7 @@ class TestUploadCircuit:
         assert resp.status_code == 201
         data = resp.json()
         assert data["description"] == "A complex circuit"
-        assert data["proving_key_cid"] == "QmProvingKey"
+        assert data["proving_key_cid"] == "QmW2WQi7j6c7UgJTarActp7tDNikE4B2qXtFCfLPdsgaTQ"
         assert data["tags"] == ["ml", "zkml"]
         assert data["num_public_inputs"] == 5
         assert data["num_private_inputs"] == 10
@@ -122,10 +132,15 @@ class TestListCircuits:
         assert data["total"] == 0
 
     async def test_list_with_data(self, client: AsyncClient):
+        list_cids = [
+            "QmSsw6EcnwEiTT9c4rnAGeSENvsJMepNHmbrgi2S9bXNjm",
+            "QmbWqxBEKC3P8tqsKc98xmWNzrzDtRLMiMPL8wBuTGsMnR",
+            "QmTzQ1JRkWErjk39mryYw2WVaphAZNAREyMchXzYQ7c15n",
+        ]
         for i in range(3):
             await client.post(
                 "/circuits?hotkey=5FPub",
-                json=_circuit_payload(name=f"circ-{i}", ipfs_cid=f"QmCid{i}"),
+                json=_circuit_payload(name=f"circ-{i}", ipfs_cid=list_cids[i]),
             )
         resp = await client.get("/circuits")
         assert resp.status_code == 200
@@ -134,10 +149,17 @@ class TestListCircuits:
         assert len(data["items"]) == 3
 
     async def test_list_pagination(self, client: AsyncClient):
+        page_cids = [
+            "QmVE7b6qVAPo93rG2Vj1zRz7WMXQ5YsMDMBqxfPniXMV5G",
+            "QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco",
+            "QmZTR5bcpQD7cFgTorqxZDYaew1Wqgfbd2ud9QqGPAkK2V",
+            "QmaozNR7DZHQK1ZcU9p7QdrshMvXqWK6gpu5rmrkPdT3L4",
+            "QmcRD4wkPPi6dig81r5sLj9Zm1gDCL4zgpEj9CfuRrGbzF",
+        ]
         for i in range(5):
             await client.post(
                 "/circuits?hotkey=5FPub",
-                json=_circuit_payload(name=f"circ-{i}", ipfs_cid=f"QmCid{i}"),
+                json=_circuit_payload(name=f"circ-{i}", ipfs_cid=page_cids[i]),
             )
         resp = await client.get("/circuits?page=1&page_size=2")
         data = resp.json()
@@ -149,11 +171,11 @@ class TestListCircuits:
     async def test_list_filter_proof_type(self, client: AsyncClient):
         await client.post(
             "/circuits?hotkey=5FP",
-            json=_circuit_payload(name="g16", proof_type="groth16", ipfs_cid="QmA"),
+            json=_circuit_payload(name="g16", proof_type="groth16", ipfs_cid="QmdEjBo13JBjNxVFmgJesYmzPBEMsRhB7FBqWKdPALMtec"),
         )
         await client.post(
             "/circuits?hotkey=5FP",
-            json=_circuit_payload(name="plonk", proof_type="plonk", ipfs_cid="QmB"),
+            json=_circuit_payload(name="plonk", proof_type="plonk", ipfs_cid="QmfGBRT6BbWJd7yUc2uYdaUZJBbnEFvTqehPFoSMQ6wgdr"),
         )
         resp = await client.get("/circuits?proof_type=groth16")
         data = resp.json()
@@ -163,11 +185,11 @@ class TestListCircuits:
     async def test_list_search(self, client: AsyncClient):
         await client.post(
             "/circuits?hotkey=5FP",
-            json=_circuit_payload(name="my-special-circuit", ipfs_cid="QmX"),
+            json=_circuit_payload(name="my-special-circuit", ipfs_cid="QmNRCQWfgze6AbBCaT1rkYFojoNitYDAMXU647qPCDAqS9"),
         )
         await client.post(
             "/circuits?hotkey=5FP",
-            json=_circuit_payload(name="other", ipfs_cid="QmY"),
+            json=_circuit_payload(name="other", ipfs_cid="QmPCYqeRkGxcAfuHQDC46BKDS1AXvDXTTcfR4FXhYhpmEn"),
         )
         resp = await client.get("/circuits?search=special")
         data = resp.json()
