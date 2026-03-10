@@ -56,10 +56,20 @@ class IPFSStorage(StorageBackend):
         cid = body["Hash"]
         size = int(body.get("Size", len(data)))
 
-        # Verify content integrity after upload
-        downloaded = await self.download(cid)
-        if self._sha256(downloaded) != sha:
-            raise ValueError(f"IPFS content verification failed for CID {cid}: hash mismatch")
+        # Verify content integrity: re-download and compare SHA256.
+        # Retry verification independently to handle IPFS propagation delay.
+        for attempt in range(3):
+            try:
+                downloaded = await self.download(cid)
+                if self._sha256(downloaded) == sha:
+                    break
+            except httpx.HTTPError:
+                if attempt == 2:
+                    raise ValueError(f"IPFS content verification failed for CID {cid}: download error after upload")
+            import asyncio
+            await asyncio.sleep(1 * (attempt + 1))
+        else:
+            raise ValueError(f"IPFS content verification failed for CID {cid}: hash mismatch after 3 attempts")
 
         logger.info("Uploaded %s  cid=%s  size=%d  (verified)", filename, cid, size)
         return UploadResult(cid=cid, size_bytes=size, sha256_hash=sha)
