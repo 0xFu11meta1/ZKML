@@ -65,14 +65,13 @@ async def create_org(
     if existing.scalar_one_or_none():
         raise HTTPException(status.HTTP_409_CONFLICT, f"Org slug '{body.slug}' already exists")
 
-    org = OrganizationRow(name=body.name, slug=body.slug)
-    db.add(org)
-    await db.flush()
-
-    # Ensure user exists
+    # Atomic: create org + user + membership in one flush cycle
     user = await _ensure_user(db, publisher)
 
-    # Creator becomes admin
+    org = OrganizationRow(name=body.name, slug=body.slug)
+    db.add(org)
+    await db.flush()  # assigns org.id
+
     membership = MembershipRow(user_id=user.id, org_id=org.id, role=OrgRole.ADMIN)
     db.add(membership)
 

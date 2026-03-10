@@ -102,11 +102,12 @@ async def _dispatch_async(task, job_id: int) -> dict:
                 await _fail_job(db, job, "No online provers available")
                 return {"error": "no provers"}
 
-            # Assign partitions round-robin to available provers
+            # Lock partitions for assignment to prevent races
             partitions = (await db.execute(
                 select(CircuitPartitionRow)
                 .where(CircuitPartitionRow.job_id == job.id)
                 .order_by(CircuitPartitionRow.partition_index)
+                .with_for_update()
             )).scalars().all()
 
             for i, partition in enumerate(partitions):
@@ -164,11 +165,15 @@ def complete_proof_job(job_id: int, proof_data_cid: str, proof_hash: str) -> dic
 
 
 async def _complete_async(job_id: int, proof_data_cid: str, proof_hash: str) -> dict:
+    import re as _re
     from sqlalchemy import select, update
     from registry.core.database import async_session
     from registry.models.database import (
         ProofJobRow, ProofJobStatus, ProofRow, CircuitRow, CircuitPartitionRow,
     )
+
+    if not _re.match(r'^[a-f0-9]{64}$', proof_hash):
+        return {"error": f"Invalid proof hash format: {proof_hash[:80]}"}
 
     async with async_session() as db:
         job = (await db.execute(
