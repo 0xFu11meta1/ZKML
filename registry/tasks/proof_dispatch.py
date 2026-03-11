@@ -34,7 +34,7 @@ def dispatch_proof_job(self, job_id: int) -> dict:
 async def _dispatch_async(task, job_id: int) -> dict:
     """Async inner dispatch logic."""
     from sqlalchemy import select, update
-    from registry.core.database import async_session
+    from registry.core.deps import async_session
     from registry.models.database import (
         ProofJobRow, ProofJobStatus, CircuitRow,
         CircuitPartitionRow, ProofRow, ProverCapabilityRow,
@@ -167,7 +167,7 @@ def complete_proof_job(job_id: int, proof_data_cid: str, proof_hash: str) -> dic
 async def _complete_async(job_id: int, proof_data_cid: str, proof_hash: str) -> dict:
     import re as _re
     from sqlalchemy import select, update
-    from registry.core.database import async_session
+    from registry.core.deps import async_session
     from registry.models.database import (
         ProofJobRow, ProofJobStatus, ProofRow, CircuitRow, CircuitPartitionRow,
     )

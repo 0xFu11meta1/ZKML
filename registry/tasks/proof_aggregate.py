@@ -45,7 +45,7 @@ def aggregate_completed_jobs(self) -> dict:
 
 async def _aggregate_sweep(task) -> dict:
     from sqlalchemy import select, func
-    from registry.core.database import async_session
+    from registry.core.deps import async_session
     from registry.models.database import (
         ProofJobRow, ProofJobStatus, CircuitPartitionRow,
     )

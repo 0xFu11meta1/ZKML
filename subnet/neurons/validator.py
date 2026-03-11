@@ -400,7 +400,7 @@ class ValidatorNeuron(BaseNeuron):
     async def _sync_scores_to_registry(self, prover_scores: list[ProverScore]) -> None:
         """Push prover scores to the registry so the API can serve rankings."""
         try:
-            from registry.core.database import async_session
+            from registry.core.deps import async_session
             from registry.models.database import ProverCapabilityRow
             from sqlalchemy import select
 

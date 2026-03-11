@@ -23,7 +23,7 @@ def check_prover_health(self) -> dict:
 
 async def _check_health_async() -> dict:
     from sqlalchemy import select, update
-    from registry.core.database import async_session
+    from registry.core.deps import async_session
     from registry.models.database import ProverCapabilityRow, CircuitPartitionRow
     from registry.core.config import settings
 
@@ -102,7 +102,7 @@ def update_prover_rankings(self) -> dict:
 
 async def _update_rankings_async() -> dict:
     from sqlalchemy import select
-    from registry.core.database import async_session
+    from registry.core.deps import async_session
     from registry.models.database import ProverCapabilityRow
 
     async with async_session() as db:
@@ -137,7 +137,7 @@ def cleanup_stale_jobs(self) -> dict:
 
 async def _cleanup_stale_async() -> dict:
     from sqlalchemy import select, update
-    from registry.core.database import async_session
+    from registry.core.deps import async_session
     from registry.models.database import ProofJobRow, ProofJobStatus
     from registry.core.config import settings
 
