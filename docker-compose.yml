@@ -31,7 +31,7 @@ services:
       start_period: 10s
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.2-alpine
     ports:
       - "6379:6379"
     command: redis-server --appendonly yes
@@ -102,7 +102,7 @@ services:
       - redis
 
   ipfs:
-    image: ipfs/kubo:latest
+    image: ipfs/kubo:v0.27.0
     ports:
       - "4001:4001" # swarm
       - "5001:5001" # API
@@ -117,7 +117,7 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=http://registry:8000
       - NEXTAUTH_URL=http://localhost:3000
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-change-me-in-production}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET env var}
     depends_on:
       registry:
         condition: service_healthy
@@ -143,7 +143,7 @@ services:
     ports:
       - "3001:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD env var}
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/dashboard.json
     volumes:

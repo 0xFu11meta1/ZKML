@@ -50,7 +50,7 @@ def _default_registry() -> str:
 
 def _client(registry: str, hotkey: str):
     from sdk.client import ModelionnClient
-    return ModelionnClient(registry_url=registry, hotkey=_resolve_hotkey(hotkey))
+    return ModelionnClient(registry_url=registry or _default_registry(), hotkey=_resolve_hotkey(hotkey))
 
 
 def _json_output(data: dict | list) -> None:
@@ -85,7 +85,7 @@ def list_circuits(
     proof_type: str | None = typer.Option(None, "--proof-type", "-p", help="groth16|plonk|halo2|stark"),
     circuit_type: str | None = typer.Option(None, "--circuit-type", "-c", help="general|evm|zkml|custom"),
     page: int = typer.Option(1, "--page"),
-    registry: str = typer.Option("http://localhost:8000", "--registry", "-r"),
+    registry: str = typer.Option("", "--registry", "-r"),
     output_json: bool = typer.Option(False, "--json"),
 ):
     """List ZK circuits in the registry."""
@@ -126,7 +126,7 @@ def upload_circuit(
     data_cid: str = typer.Option(..., "--cid", help="IPFS CID of circuit data"),
     proving_key_cid: str = typer.Option("", "--pk-cid"),
     verification_key_cid: str = typer.Option("", "--vk-cid"),
-    registry: str = typer.Option("http://localhost:8000", "--registry", "-r"),
+    registry: str = typer.Option("", "--registry", "-r"),
     hotkey: str = typer.Option("", "--hotkey", "-k"),
 ):
     """Upload a ZK circuit to the registry."""
@@ -150,7 +150,7 @@ def request_proof(
     witness_cid: str = typer.Option(..., "--witness", "-w", help="IPFS CID of witness data"),
     partitions: int = typer.Option(4, "--partitions"),
     redundancy: int = typer.Option(2, "--redundancy"),
-    registry: str = typer.Option("http://localhost:8000", "--registry", "-r"),
+    registry: str = typer.Option("", "--registry", "-r"),
     hotkey: str = typer.Option("", "--hotkey", "-k"),
     output_json: bool = typer.Option(False, "--json"),
 ):
@@ -172,7 +172,7 @@ def request_proof(
 @app.command(name="proof-status")
 def proof_status(
     task_id: str = typer.Argument(..., help="Proof job task ID"),
-    registry: str = typer.Option("http://localhost:8000", "--registry", "-r"),
+    registry: str = typer.Option("", "--registry", "-r"),
     output_json: bool = typer.Option(False, "--json"),
 ):
     """Check the status of a proof generation job."""
@@ -192,7 +192,7 @@ def proof_status(
 def list_proof_jobs(
     status: str | None = typer.Option(None, "--status", "-s"),
     page: int = typer.Option(1, "--page"),
-    registry: str = typer.Option("http://localhost:8000", "--registry", "-r"),
+    registry: str = typer.Option("", "--registry", "-r"),
     output_json: bool = typer.Option(False, "--json"),
 ):
     """List proof generation jobs."""
@@ -220,7 +220,7 @@ def verify_proof_cmd(
     proof_id: int = typer.Argument(..., help="Proof ID to verify"),
     vk_cid: str = typer.Option(..., "--vk-cid", help="Verification key CID"),
     public_inputs: str = typer.Option("{}", "--inputs", help="Public inputs JSON"),
-    registry: str = typer.Option("http://localhost:8000", "--registry", "-r"),
+    registry: str = typer.Option("", "--registry", "-r"),
     hotkey: str = typer.Option("", "--hotkey", "-k"),
 ):
     """Verify a completed proof."""
@@ -240,7 +240,7 @@ def verify_proof_cmd(
 def list_provers(
     online_only: bool = typer.Option(False, "--online", help="Show only online provers"),
     page: int = typer.Option(1, "--page"),
-    registry: str = typer.Option("http://localhost:8000", "--registry", "-r"),
+    registry: str = typer.Option("", "--registry", "-r"),
     output_json: bool = typer.Option(False, "--json"),
 ):
     """List provers in the network."""
@@ -273,7 +273,7 @@ def list_provers(
 
 @app.command(name="network-stats")
 def network_stats(
-    registry: str = typer.Option("http://localhost:8000", "--registry", "-r"),
+    registry: str = typer.Option("", "--registry", "-r"),
     output_json: bool = typer.Option(False, "--json"),
 ):
     """Show ZK prover network statistics."""
