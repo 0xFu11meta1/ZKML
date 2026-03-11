@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import csv
 import io
+from datetime import date
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
 from registry.core.deps import get_db
+from registry.core.security import verify_publisher
 from registry.models.database import AuditLogRow
 
 
@@ -88,16 +90,29 @@ async def export_audit_csv(
     action: str | None = Query(None),
     resource_type: str | None = Query(None),
     actor_hotkey: str | None = Query(None),
+    from_date: date | None = Query(None, description="Start date (inclusive) YYYY-MM-DD"),
+    to_date: date | None = Query(None, description="End date (inclusive) YYYY-MM-DD"),
     limit: int = Query(10_000, ge=1, le=100_000),
     db: AsyncSession = Depends(get_db),
+    publisher: str = Depends(verify_publisher),
 ) -> StreamingResponse:
-    """Export audit logs as a downloadable CSV file (streamed row-by-row)."""
+    """Export audit logs as a downloadable CSV file (streamed row-by-row).
+
+    Requires authentication. Date range filtering is strongly recommended
+    to avoid exporting extremely large result sets.
+    """
     query = select(AuditLogRow).order_by(AuditLogRow.created_at.desc())
     if action:
         query = query.where(AuditLogRow.action == action)
     if resource_type:
         query = query.where(AuditLogRow.resource_type == resource_type)
     if actor_hotkey:
+        query = query.where(AuditLogRow.actor_hotkey == actor_hotkey)
+    if from_date:
+        query = query.where(AuditLogRow.created_at >= from_date.isoformat())
+    if to_date:
+        query = query.where(AuditLogRow.created_at < (to_date.isoformat() + "T23:59:59.999999"))
+    query = query.limit(limit)
         query = query.where(AuditLogRow.actor_hotkey == actor_hotkey)
     query = query.limit(limit)
 
