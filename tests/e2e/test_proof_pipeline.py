@@ -13,11 +13,25 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 import uuid
+from unittest.mock import MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select, update
+
+# Pre-mock Celery so the proof dispatch route doesn't connect to a real broker.
+_mock_celery_app = MagicMock()
+_mock_dispatch = MagicMock()
+_mock_dispatch.delay = MagicMock(return_value=None)
+_mock_task_module = MagicMock()
+_mock_task_module.dispatch_proof_job = _mock_dispatch
+
+if "registry.tasks.celery_app" not in sys.modules:
+    sys.modules["registry.tasks.celery_app"] = _mock_celery_app
+if "registry.tasks.proof_dispatch" not in sys.modules:
+    sys.modules["registry.tasks.proof_dispatch"] = _mock_task_module
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -112,6 +126,13 @@ def _prover_payload(*, backend: str = "cuda", score: float = 9500.0) -> dict:
     }
 
 
+def _random_cid() -> str:
+    """Generate a valid CIDv0 (Qm + 44 base58 chars)."""
+    import random
+    _b58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    return "Qm" + "".join(random.choices(_b58, k=44))
+
+
 def _circuit_payload(*, name: str = "e2e-circuit", constraints: int = 100_000) -> dict:
     return {
         "name": name,
@@ -121,7 +142,7 @@ def _circuit_payload(*, name: str = "e2e-circuit", constraints: int = 100_000) -
         "num_constraints": constraints,
         "num_public_inputs": 3,
         "num_private_inputs": 10,
-        "ipfs_cid": f"Qm{uuid.uuid4().hex[:40]}",
+        "ipfs_cid": _random_cid(),
         "size_bytes": 1024 * 512,
         "tags": ["e2e", "test"],
     }
@@ -181,7 +202,7 @@ async def _simulate_completion(
 
     for p in partitions:
         p.status = "completed"
-        p.proof_fragment_cid = f"QmFragment{p.partition_index}"
+        p.proof_fragment_cid = _random_cid()
         p.generation_time_ms = 1200 + p.partition_index * 100
 
     job.partitions_completed = len(partitions)
@@ -198,7 +219,7 @@ async def _simulate_completion(
         circuit_id=circuit_id,
         job_id=job.id,
         proof_type=job.circuit.proof_type,
-        proof_data_cid=f"QmProof{uuid.uuid4().hex[:16]}",
+        proof_data_cid=_random_cid(),
         public_inputs_json=job.public_inputs_json,
         proof_size_bytes=len(proof_data),
         generation_time_ms=sum(p.generation_time_ms or 0 for p in partitions),
@@ -302,7 +323,7 @@ class TestFullProofPipeline:
         # ── Step 3: Request proof job ──────────────────────
         job_resp = await e2e_client.post(
             f"/proofs/jobs?hotkey={REQUESTER}",
-            json={"circuit_id": circuit_id, "witness_cid": "QmWitnessE2E123"},
+            json={"circuit_id": circuit_id, "witness_cid": _random_cid()},
         )
         assert job_resp.status_code == 202
         job = job_resp.json()
@@ -364,7 +385,7 @@ class TestFullProofPipeline:
         """Requesting proof for a circuit that doesn't exist → 404."""
         resp = await e2e_client.post(
             f"/proofs/jobs?hotkey={REQUESTER}",
-            json={"circuit_id": 99999, "witness_cid": "QmBogus"},
+            json={"circuit_id": 99999, "witness_cid": _random_cid()},
         )
         assert resp.status_code == 404
 
@@ -385,7 +406,7 @@ class TestFullProofPipeline:
         for i in range(3):
             resp = await e2e_client.post(
                 f"/proofs/jobs?hotkey={REQUESTER}",
-                json={"circuit_id": circuit["id"], "witness_cid": f"QmWitness{i}"},
+                json={"circuit_id": circuit["id"], "witness_cid": _random_cid()},
             )
             assert resp.status_code == 202
             task_ids.append(resp.json()["task_id"])
