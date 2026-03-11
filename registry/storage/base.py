@@ -28,6 +28,11 @@ class StorageBackend(abc.ABC):
     async def download(self, cid: str) -> bytes:
         """Download the full content addressed by *cid*."""
 
+    # Alias retained for call-site compatibility.
+    async def download_bytes(self, cid: str) -> bytes:
+        """Alias for :meth:`download`."""
+        return await self.download(cid)
+
     @abc.abstractmethod
     async def download_to_path(self, cid: str, dest: str) -> None:
         """Download content to a local path."""

@@ -165,7 +165,8 @@ async def _aggregate_job(db, job) -> None:
     proof_hash = hashlib.sha256(combined).hexdigest()
 
     # Upload aggregated proof to IPFS
-    proof_data_cid = await storage.upload(combined, filename=f"proof_{job.task_id}.bin")
+    upload_result = await storage.upload(combined, filename=f"proof_{job.task_id}.bin")
+    proof_data_cid = upload_result.cid
 
     # 2. VERIFYING
     job.status = ProofJobStatus.VERIFYING
