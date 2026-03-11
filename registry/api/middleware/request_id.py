@@ -8,6 +8,7 @@ Generates a UUID4 request ID for each request and:
 
 from __future__ import annotations
 
+import re
 import uuid
 from contextvars import ContextVar
 
@@ -17,13 +18,19 @@ from starlette.middleware.base import BaseHTTPMiddleware
 # ContextVar for request-scoped ID — accessible from any async code
 request_id_ctx: ContextVar[str] = ContextVar("request_id", default="")
 
+# Only accept hex UUIDs (with or without dashes) — max 36 chars.
+_VALID_RID = re.compile(r"^[0-9a-fA-F\-]{1,36}$")
+
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
     """Inject and propagate X-Request-ID on every request/response."""
 
     async def dispatch(self, request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
-        # Accept from upstream proxy, or generate a fresh one
-        rid = request.headers.get("x-request-id") or uuid.uuid4().hex
+        # Accept from upstream proxy if it's a safe UUID/hex string,
+        # otherwise generate a fresh one to prevent log injection.
+        rid = request.headers.get("x-request-id", "")
+        if not rid or not _VALID_RID.match(rid):
+            rid = uuid.uuid4().hex
         token = request_id_ctx.set(rid)
         try:
             response: Response = await call_next(request)
