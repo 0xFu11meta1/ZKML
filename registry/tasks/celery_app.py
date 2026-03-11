@@ -41,10 +41,6 @@ app.conf.update(
             "task": "registry.tasks.periodic.reset_daily_api_key_counters",
             "schedule": crontab(minute=0, hour=0),  # midnight UTC
         },
-        "refresh-prover-rankings": {
-            "task": "registry.tasks.periodic.refresh_prover_rankings",
-            "schedule": crontab(minute=0, hour="*/6"),  # every 6 hours
-        },
         "check-prover-health": {
             "task": "registry.tasks.prover_health.check_prover_health",
             "schedule": 60.0,  # every 60 seconds

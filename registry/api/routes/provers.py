@@ -251,6 +251,20 @@ async def network_stats(
     )).all()
     gpu_backends = {str(r[0].value if hasattr(r[0], 'value') else r[0]): r[1] for r in gpu_rows}
 
+    # Proof system distribution — aggregate from comma-separated proof types
+    csv_rows = (await db.execute(
+        select(ProverCapabilityRow.supported_proof_types_csv).where(
+            ProverCapabilityRow.supported_proof_types_csv.isnot(None),
+            ProverCapabilityRow.supported_proof_types_csv != "",
+        )
+    )).scalars().all()
+    proof_systems: dict[str, int] = {}
+    for csv in csv_rows:
+        for pt in csv.split(","):
+            pt = pt.strip()
+            if pt:
+                proof_systems[pt] = proof_systems.get(pt, 0) + 1
+
     return {
         "total_provers": total,
         "online_provers": online,
@@ -258,7 +272,7 @@ async def network_stats(
         "total_vram_bytes": total_vram,
         "total_proofs_generated": total_proofs_sum,
         "avg_proof_time_ms": float(avg_time),
-        "proof_systems": {},  # Would aggregate from supported_proof_types_csv
+        "proof_systems": proof_systems,
         "gpu_backends": gpu_backends,
     }
 

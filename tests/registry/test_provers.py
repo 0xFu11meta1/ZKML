@@ -241,3 +241,6 @@ class TestNetworkStats:
         assert data["total_vram_bytes"] == 72_000_000_000
         assert "cuda" in data["gpu_backends"]
         assert "rocm" in data["gpu_backends"]
+        # Both provers support ["groth16", "plonk"] so both should appear in proof_systems
+        assert data["proof_systems"]["groth16"] == 2
+        assert data["proof_systems"]["plonk"] == 2
