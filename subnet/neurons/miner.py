@@ -46,6 +46,7 @@ class MinerNeuron(BaseNeuron):
         self._successful_proofs = 0
         self._failed_proofs = 0
         self._current_load = 0.0
+        self._benchmark_score: float = 0.0
 
         # Attach handlers
         self.axon.attach(
@@ -189,7 +190,7 @@ class MinerNeuron(BaseNeuron):
         synapse.vram_total_bytes = self._gpu_info.get("vram_total_bytes", 0)
         synapse.vram_available_bytes = self._gpu_info.get("vram_available_bytes", 0)
         synapse.compute_units = self._gpu_info.get("compute_units", 0)
-        synapse.benchmark_score = self._gpu_info.get("benchmark_score", 0.0)
+        synapse.benchmark_score = self._benchmark_score or self._gpu_info.get("benchmark_score", 0.0)
         synapse.supported_proof_types = "groth16,plonk,halo2,stark"
         synapse.max_constraints = 100_000_000  # 100M default
         synapse.current_load = self._current_load
@@ -213,8 +214,10 @@ class MinerNeuron(BaseNeuron):
                 await self._prover.prove(bench_circuit, bench_witness)
                 elapsed = time.monotonic() - start
                 synapse.benchmark_score = 1.0 / max(elapsed, 0.001)
-            except Exception:
-                pass
+                self._benchmark_score = synapse.benchmark_score
+                logger.info("Benchmark completed: score=%.2f (%.3fs)", synapse.benchmark_score, elapsed)
+            except Exception as exc:
+                logger.warning("Benchmark failed: %s", exc)
 
         return synapse
 
@@ -295,6 +298,22 @@ class MinerNeuron(BaseNeuron):
             return float(self.metagraph.S[uid])
         return 0.0
 
+    def _report_stats_to_registry(self) -> None:
+        """Best-effort report of miner stats to the registry API."""
+        try:
+            from sdk.client import ModelionnClient
+            from registry.core.config import settings
+
+            with ModelionnClient(
+                registry_url=settings.registry_url,
+                hotkey=self.wallet.hotkey.ss58_address,
+            ) as client:
+                client.ping_prover(
+                    vram_available_bytes=self._gpu_info.get("vram_available_bytes", 0),
+                )
+        except Exception as exc:
+            logger.debug("Registry stats report failed (non-critical): %s", exc)
+
     # ── Lifecycle ────────────────────────────────────────────
 
     async def forward(self) -> None:
@@ -313,6 +332,7 @@ class MinerNeuron(BaseNeuron):
         try:
             while True:
                 self.sync()
+                self._report_stats_to_registry()
                 time.sleep(60)
         except KeyboardInterrupt:
             logger.info("Prover miner shutting down")
