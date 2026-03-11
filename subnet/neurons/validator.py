@@ -99,6 +99,8 @@ class ValidatorNeuron(BaseNeuron):
                 self.scores[score.uid] = (
                     self.alpha * reward + (1 - self.alpha) * self.scores[score.uid]
                 )
+            # Sync scores to registry DB (best-effort)
+            await self._sync_scores_to_registry(prover_scores)
 
         # 6. Set weights
         self._steps_since_weight_set += 1
@@ -392,6 +394,34 @@ class ValidatorNeuron(BaseNeuron):
             ))
 
         return scores
+
+    # ── Registry score sync ─────────────────────────────────
+
+    async def _sync_scores_to_registry(self, prover_scores: list[ProverScore]) -> None:
+        """Push prover scores to the registry so the API can serve rankings."""
+        try:
+            from registry.core.database import async_session
+            from registry.models.database import ProverCapabilityRow
+            from sqlalchemy import select
+
+            async with async_session() as db:
+                for score in prover_scores:
+                    prover = self._provers.get(score.uid)
+                    if not prover:
+                        continue
+                    row = (
+                        await db.execute(
+                            select(ProverCapabilityRow).where(
+                                ProverCapabilityRow.hotkey == prover.hotkey
+                            )
+                        )
+                    ).scalar_one_or_none()
+                    if row:
+                        row.benchmark_score = score.total(self.reward_weights) * 100
+                    # If row doesn't exist, prover hasn't registered via API yet
+                await db.commit()
+        except Exception as exc:
+            logger.debug("Registry score sync failed (non-critical): %s", exc)
 
     # ── Weight setting ───────────────────────────────────────
 
