@@ -113,8 +113,6 @@ async def export_audit_csv(
     if to_date:
         query = query.where(AuditLogRow.created_at < (to_date.isoformat() + "T23:59:59.999999"))
     query = query.limit(limit)
-        query = query.where(AuditLogRow.actor_hotkey == actor_hotkey)
-    query = query.limit(limit)
 
     result = await db.execute(query)
     rows = result.scalars().all()

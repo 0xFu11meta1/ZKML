@@ -75,7 +75,10 @@ export default function ProverDetailPage() {
             Last seen {timeAgo(prover.last_seen)}
           </p>
         </div>
-        <Badge variant={prover.online ? "success" : "destructive"} className="text-sm">
+        <Badge
+          variant={prover.online ? "success" : "destructive"}
+          className="text-sm"
+        >
           {prover.online ? "Online" : "Offline"}
         </Badge>
       </div>
@@ -181,9 +184,7 @@ export default function ProverDetailPage() {
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">Stake</span>
-              <span className="font-mono">
-                {prover.stake.toFixed(4)} τ
-              </span>
+              <span className="font-mono">{prover.stake.toFixed(4)} τ</span>
             </div>
           </CardContent>
         </Card>

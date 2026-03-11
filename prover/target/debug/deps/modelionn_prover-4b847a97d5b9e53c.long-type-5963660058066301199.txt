@@ -1,0 +1,1 @@
+&DensePolynomial<ark_ff::Fp<MontBackend<FrConfig, 4>, 4>>

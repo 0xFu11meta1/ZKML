@@ -86,7 +86,10 @@ export default function ProofDetailPage() {
             Created {timeAgo(job.created_at)}
           </p>
         </div>
-        <Badge variant={STATUS_VARIANTS[job.status] || "secondary"} className="text-sm">
+        <Badge
+          variant={STATUS_VARIANTS[job.status] || "secondary"}
+          className="text-sm"
+        >
           {job.status}
         </Badge>
       </div>
@@ -106,7 +109,11 @@ export default function ProofDetailPage() {
         <StatCard
           icon={<Clock className="h-5 w-5 text-yellow-600" />}
           title="Actual Time"
-          value={job.actual_time_ms ? `${(job.actual_time_ms / 1000).toFixed(1)}s` : "—"}
+          value={
+            job.actual_time_ms
+              ? `${(job.actual_time_ms / 1000).toFixed(1)}s`
+              : "—"
+          }
         />
         <StatCard
           icon={<Cpu className="h-5 w-5 text-green-600" />}
@@ -140,7 +147,9 @@ export default function ProofDetailPage() {
           <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-gray-500">
             <div>
               <span className="font-medium text-gray-700">Witness CID:</span>
-              <p className="font-mono text-xs mt-1 truncate">{job.witness_cid}</p>
+              <p className="font-mono text-xs mt-1 truncate">
+                {job.witness_cid}
+              </p>
             </div>
             <div>
               <span className="font-medium text-gray-700">Requester:</span>
@@ -150,7 +159,9 @@ export default function ProofDetailPage() {
             </div>
             {job.estimated_time_ms && (
               <div>
-                <span className="font-medium text-gray-700">Estimated Time:</span>
+                <span className="font-medium text-gray-700">
+                  Estimated Time:
+                </span>
                 <p className="font-mono text-xs mt-1">
                   {(job.estimated_time_ms / 1000).toFixed(1)}s
                 </p>

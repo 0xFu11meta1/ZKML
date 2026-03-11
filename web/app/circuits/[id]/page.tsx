@@ -14,15 +14,7 @@ import {
   type Circuit,
 } from "@/lib/api";
 import { formatNumber, timeAgo } from "@/lib/utils";
-import {
-  ArrowLeft,
-  Cpu,
-  Hash,
-  Key,
-  Layers,
-  Zap,
-  FileText,
-} from "lucide-react";
+import { ArrowLeft, Cpu, Hash, Key, Layers, Zap, FileText } from "lucide-react";
 
 export default function CircuitDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -155,10 +147,7 @@ export default function CircuitDetailPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Request Proof</CardTitle>
-            <Button
-              size="sm"
-              onClick={() => setShowProofForm(!showProofForm)}
-            >
+            <Button size="sm" onClick={() => setShowProofForm(!showProofForm)}>
               {showProofForm ? "Cancel" : "New Proof Request"}
             </Button>
           </div>
@@ -177,9 +166,7 @@ export default function CircuitDetailPage() {
       {proofs?.items && proofs.items.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              Proofs ({proofs.total})
-            </CardTitle>
+            <CardTitle className="text-base">Proofs ({proofs.total})</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -319,9 +306,7 @@ function ProofRequestForm({
         {requestProof.isPending ? "Submitting..." : "Request Proof"}
       </Button>
       {requestProof.isError && (
-        <p className="text-sm text-red-500">
-          {requestProof.error.message}
-        </p>
+        <p className="text-sm text-red-500">{requestProof.error.message}</p>
       )}
     </form>
   );
@@ -367,9 +352,7 @@ function DetailRow({
       <div className="mt-0.5 text-gray-400">{icon}</div>
       <div className="min-w-0 flex-1">
         <p className="text-gray-500">{label}</p>
-        <p
-          className={`mt-0.5 break-all ${mono ? "font-mono text-xs" : ""}`}
-        >
+        <p className={`mt-0.5 break-all ${mono ? "font-mono text-xs" : ""}`}>
           {value}
         </p>
       </div>

@@ -53,12 +53,18 @@ async def client(db_engine):
     from registry.api.routes.circuits import router as circuits_router
     from registry.api.routes.proofs import router as proofs_router
     from registry.api.routes.provers import router as provers_router
+    from registry.api.routes.organizations import router as orgs_router
+    from registry.api.routes.api_keys import router as api_keys_router
+    from registry.api.routes.audit import router as audit_router
     from fastapi import FastAPI
 
     app = FastAPI()
     app.include_router(circuits_router, prefix="/circuits")
     app.include_router(proofs_router, prefix="/proofs")
     app.include_router(provers_router, prefix="/provers")
+    app.include_router(orgs_router, prefix="/orgs")
+    app.include_router(api_keys_router, prefix="/api-keys")
+    app.include_router(audit_router, prefix="/audit")
 
     session_factory = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
 
