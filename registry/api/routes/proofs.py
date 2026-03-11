@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from registry.core.config import settings
 from registry.core.deps import get_db
+from registry.core.security import verify_publisher
 from registry.models.database import (
     CircuitRow,
     ProofJobRow,
@@ -155,7 +156,7 @@ def _proof_to_response(row: ProofRow) -> dict:
 async def request_proof(
     body: ProofRequest,
     db: AsyncSession = Depends(get_db),
-    requester_hotkey: str = Query(..., alias="hotkey", min_length=1, max_length=128),
+    requester_hotkey: str = Depends(verify_publisher),
 ) -> dict:
     """Submit a proof generation request."""
     # Verify circuit exists

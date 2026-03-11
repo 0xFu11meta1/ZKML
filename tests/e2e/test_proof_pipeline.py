@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+import time
 import uuid
 from unittest.mock import MagicMock
 
@@ -106,10 +107,19 @@ async def e2e_client(_e2e_engine, _e2e_session_factory):
 # Helpers
 # ---------------------------------------------------------------------------
 
-MINER_A = "5FMinerAlpha"
-MINER_B = "5FMinerBeta"
-PUBLISHER = "5FPublisher"
-REQUESTER = "5FRequester"
+MINER_A = "5FMinerAlphaXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+MINER_B = "5FMinerBetaXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+PUBLISHER = "5FPublisherXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+REQUESTER = "5FRequesterXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+
+_nonce_seq = 0
+
+
+def _auth(hotkey: str) -> dict:
+    global _nonce_seq
+    _nonce_seq += 1
+    nonce = int(time.time()) + _nonce_seq
+    return {"x-hotkey": hotkey, "x-signature": "deadbeef", "x-nonce": str(nonce)}
 
 
 def _prover_payload(*, backend: str = "cuda", score: float = 9500.0) -> dict:
@@ -248,8 +258,9 @@ class TestFullProofPipeline:
     async def test_circuit_upload_and_discovery(self, e2e_client: AsyncClient):
         """Upload a circuit and verify it appears in listings and by hash."""
         resp = await e2e_client.post(
-            f"/circuits?hotkey={PUBLISHER}",
+            "/circuits",
             json=_circuit_payload(name="discovery-test"),
+            headers=_auth(PUBLISHER),
         )
         assert resp.status_code == 201
         circuit = resp.json()
@@ -272,14 +283,16 @@ class TestFullProofPipeline:
     async def test_prover_registration_and_stats(self, e2e_client: AsyncClient):
         """Register provers and verify network stats reflect them."""
         resp_a = await e2e_client.post(
-            f"/provers/register?hotkey={MINER_A}",
+            "/provers/register",
             json=_prover_payload(score=9500.0),
+            headers=_auth(MINER_A),
         )
         assert resp_a.status_code == 201
 
         resp_b = await e2e_client.post(
-            f"/provers/register?hotkey={MINER_B}",
+            "/provers/register",
             json=_prover_payload(backend="rocm", score=8000.0),
+            headers=_auth(MINER_B),
         )
         assert resp_b.status_code == 201
 
@@ -303,18 +316,21 @@ class TestFullProofPipeline:
         """End-to-end: upload → request → dispatch → prove → complete → verify."""
         # ── Step 1: Register provers ───────────────────────
         await e2e_client.post(
-            f"/provers/register?hotkey={MINER_A}",
+            "/provers/register",
             json=_prover_payload(score=9500.0),
+            headers=_auth(MINER_A),
         )
         await e2e_client.post(
-            f"/provers/register?hotkey={MINER_B}",
+            "/provers/register",
             json=_prover_payload(backend="rocm", score=8000.0),
+            headers=_auth(MINER_B),
         )
 
         # ── Step 2: Upload circuit ─────────────────────────
         circuit_resp = await e2e_client.post(
-            f"/circuits?hotkey={PUBLISHER}",
+            "/circuits",
             json=_circuit_payload(name="e2e-proof-circuit", constraints=100_000),
+            headers=_auth(PUBLISHER),
         )
         assert circuit_resp.status_code == 201
         circuit = circuit_resp.json()
@@ -322,8 +338,9 @@ class TestFullProofPipeline:
 
         # ── Step 3: Request proof job ──────────────────────
         job_resp = await e2e_client.post(
-            f"/proofs/jobs?hotkey={REQUESTER}",
+            "/proofs/jobs",
             json={"circuit_id": circuit_id, "witness_cid": _random_cid()},
+            headers=_auth(REQUESTER),
         )
         assert job_resp.status_code == 202
         job = job_resp.json()
@@ -375,17 +392,18 @@ class TestFullProofPipeline:
     async def test_duplicate_circuit_rejected(self, e2e_client: AsyncClient):
         """Same name+version cannot be uploaded twice."""
         payload = _circuit_payload(name="dup-test")
-        resp1 = await e2e_client.post(f"/circuits?hotkey={PUBLISHER}", json=payload)
+        resp1 = await e2e_client.post("/circuits", json=payload, headers=_auth(PUBLISHER))
         assert resp1.status_code == 201
 
-        resp2 = await e2e_client.post(f"/circuits?hotkey={PUBLISHER}", json=payload)
+        resp2 = await e2e_client.post("/circuits", json=payload, headers=_auth(PUBLISHER))
         assert resp2.status_code == 409
 
     async def test_proof_request_nonexistent_circuit(self, e2e_client: AsyncClient):
         """Requesting proof for a circuit that doesn't exist → 404."""
         resp = await e2e_client.post(
-            f"/proofs/jobs?hotkey={REQUESTER}",
+            "/proofs/jobs",
             json={"circuit_id": 99999, "witness_cid": _random_cid()},
+            headers=_auth(REQUESTER),
         )
         assert resp.status_code == 404
 
@@ -397,16 +415,18 @@ class TestFullProofPipeline:
         """Multiple proof jobs for the same circuit can be requested and tracked."""
         # Upload circuit
         circuit = (await e2e_client.post(
-            f"/circuits?hotkey={PUBLISHER}",
+            "/circuits",
             json=_circuit_payload(name="multi-job-circuit"),
+            headers=_auth(PUBLISHER),
         )).json()
 
         # Request 3 jobs
         task_ids = []
         for i in range(3):
             resp = await e2e_client.post(
-                f"/proofs/jobs?hotkey={REQUESTER}",
+                "/proofs/jobs",
                 json={"circuit_id": circuit["id"], "witness_cid": _random_cid()},
+                headers=_auth(REQUESTER),
             )
             assert resp.status_code == 202
             task_ids.append(resp.json()["task_id"])
@@ -421,11 +441,12 @@ class TestFullProofPipeline:
     async def test_prover_ping_keeps_online(self, e2e_client: AsyncClient):
         """Pinging a prover keeps its online status fresh."""
         await e2e_client.post(
-            f"/provers/register?hotkey={MINER_A}",
+            "/provers/register",
             json=_prover_payload(),
+            headers=_auth(MINER_A),
         )
 
-        resp = await e2e_client.post(f"/provers/ping?hotkey={MINER_A}")
+        resp = await e2e_client.post("/provers/ping", headers=_auth(MINER_A))
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
 

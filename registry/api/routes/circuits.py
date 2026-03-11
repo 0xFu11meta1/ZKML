@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from registry.core.config import settings
 from registry.core.deps import get_db
+from registry.core.security import verify_publisher
 from registry.models.database import CircuitRow, ProofType, CircuitCategory
 
 logger = logging.getLogger(__name__)
@@ -102,7 +103,7 @@ def _circuit_to_response(row: CircuitRow) -> dict:
 async def upload_circuit(
     body: CircuitUploadRequest,
     db: AsyncSession = Depends(get_db),
-    publisher_hotkey: str = Query(..., alias="hotkey", min_length=1, max_length=128),
+    publisher_hotkey: str = Depends(verify_publisher),
 ) -> dict:
     """Upload a new ZK circuit to the registry."""
     # Validate proof type

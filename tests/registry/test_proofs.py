@@ -3,7 +3,19 @@
 from __future__ import annotations
 
 import pytest
+import time
+
 from httpx import AsyncClient
+
+
+_nonce_seq = 0
+
+
+def _auth(hotkey="5FTestPublisherXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"):
+    global _nonce_seq
+    _nonce_seq += 1
+    nonce = int(time.time()) + _nonce_seq
+    return {"x-hotkey": hotkey, "x-signature": "deadbeef", "x-nonce": str(nonce)}
 
 
 # ── Helpers ──────────────────────────────────────────────────
@@ -23,7 +35,7 @@ async def _create_circuit(client: AsyncClient, **overrides) -> dict:
         "ipfs_cid": _VALID_CID,
     }
     defaults.update(overrides)
-    resp = await client.post("/circuits?hotkey=5FPublisher", json=defaults)
+    resp = await client.post("/circuits", json=defaults, headers=_auth())
     assert resp.status_code == 201
     return resp.json()
 
@@ -43,13 +55,14 @@ class TestRequestProof:
     async def test_request_success(self, client: AsyncClient):
         circuit = await _create_circuit(client)
         resp = await client.post(
-            "/proofs/jobs?hotkey=5FRequester",
+            "/proofs/jobs",
             json=_proof_request(circuit["id"]),
+            headers=_auth(),
         )
         assert resp.status_code == 202
         data = resp.json()
         assert data["circuit_id"] == circuit["id"]
-        assert data["requester_hotkey"] == "5FRequester"
+        assert data["requester_hotkey"] == "5FTestPublisherXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
         assert data["status"] == "queued"
         assert data["task_id"]
         assert data["num_partitions"] >= 1
@@ -57,12 +70,14 @@ class TestRequestProof:
 
     async def test_request_missing_circuit_404(self, client: AsyncClient):
         resp = await client.post(
-            "/proofs/jobs?hotkey=5FReq",
+            "/proofs/jobs",
             json=_proof_request(circuit_id=9999),
+            headers=_auth(),
         )
         assert resp.status_code == 404
 
     async def test_request_missing_hotkey_422(self, client: AsyncClient):
+        """Omitting auth headers should return 422 (missing x-hotkey header)."""
         circuit = await _create_circuit(client)
         resp = await client.post(
             "/proofs/jobs",
@@ -78,8 +93,9 @@ class TestRequestProof:
             ipfs_cid="QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn",
         )
         resp = await client.post(
-            "/proofs/jobs?hotkey=5FReq",
+            "/proofs/jobs",
             json=_proof_request(circuit["id"]),
+            headers=_auth(),
         )
         assert resp.status_code == 202
         data = resp.json()
@@ -92,8 +108,9 @@ class TestGetProofJob:
     async def test_get_job_by_task_id(self, client: AsyncClient):
         circuit = await _create_circuit(client)
         create = await client.post(
-            "/proofs/jobs?hotkey=5FReq",
+            "/proofs/jobs",
             json=_proof_request(circuit["id"]),
+            headers=_auth(),
         )
         task_id = create.json()["task_id"]
         resp = await client.get(f"/proofs/jobs/{task_id}")
@@ -124,8 +141,9 @@ class TestListProofJobs:
         ]
         for i in range(3):
             await client.post(
-                f"/proofs/jobs?hotkey=5FReq{i}",
+                f"/proofs/jobs",
                 json=_proof_request(circuit["id"], witness_cid=witness_cids[i]),
+                headers=_auth(),
             )
         resp = await client.get("/proofs/jobs")
         data = resp.json()
@@ -134,18 +152,21 @@ class TestListProofJobs:
 
     async def test_list_filter_by_requester(self, client: AsyncClient):
         circuit = await _create_circuit(client)
+        alice = "5FAliceXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
         await client.post(
-            "/proofs/jobs?hotkey=5FAlice",
+            "/proofs/jobs",
             json=_proof_request(circuit["id"], witness_cid="QmW2WQi7j6c7UgJTarActp7tDNikE4B2qXtFCfLPdsgaTQ"),
+            headers=_auth(alice),
         )
         await client.post(
-            "/proofs/jobs?hotkey=5FBob",
+            "/proofs/jobs",
             json=_proof_request(circuit["id"], witness_cid="QmRf22bZar3WKmojipms22PkXH1MZGmvsqzQtuSvQE3uhm"),
+            headers=_auth(),
         )
-        resp = await client.get("/proofs/jobs?requester=5FAlice")
+        resp = await client.get(f"/proofs/jobs?requester={alice}")
         data = resp.json()
         assert data["total"] == 1
-        assert data["items"][0]["requester_hotkey"] == "5FAlice"
+        assert data["items"][0]["requester_hotkey"] == alice
 
     async def test_list_pagination(self, client: AsyncClient):
         circuit = await _create_circuit(client)
@@ -158,8 +179,9 @@ class TestListProofJobs:
         ]
         for i in range(5):
             await client.post(
-                f"/proofs/jobs?hotkey=5FReq{i}",
+                f"/proofs/jobs",
                 json=_proof_request(circuit["id"], witness_cid=witness_page_cids[i]),
+                headers=_auth(),
             )
         resp = await client.get("/proofs/jobs?page=1&page_size=2")
         data = resp.json()
@@ -193,6 +215,7 @@ class TestVerifyProof:
         resp = await client.post(
             "/proofs/verify",
             json={"proof_id": 999},
+            headers=_auth(),
         )
         assert resp.status_code == 404
 
@@ -203,8 +226,9 @@ class TestJobPartitions:
     async def test_get_partitions_empty(self, client: AsyncClient):
         circuit = await _create_circuit(client)
         create = await client.post(
-            "/proofs/jobs?hotkey=5FReq",
+            "/proofs/jobs",
             json=_proof_request(circuit["id"]),
+            headers=_auth(),
         )
         task_id = create.json()["task_id"]
         resp = await client.get(f"/proofs/jobs/{task_id}/partitions")

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from registry.core.config import settings
 from registry.core.deps import get_db
+from registry.core.security import verify_publisher
 from registry.models.database import ProverCapabilityRow, GpuBackendEnum
 
 logger = logging.getLogger(__name__)
@@ -104,7 +105,7 @@ def _prover_to_response(row: ProverCapabilityRow) -> dict:
 async def register_prover(
     body: ProverRegisterRequest,
     db: AsyncSession = Depends(get_db),
-    hotkey: str = Query(..., min_length=1, max_length=128),
+    hotkey: str = Depends(verify_publisher),
 ) -> dict:
     """Register or update a prover node's capabilities."""
     try:
@@ -159,7 +160,7 @@ async def register_prover(
 @router.post("/ping")
 async def prover_ping(
     db: AsyncSession = Depends(get_db),
-    hotkey: str = Query(..., min_length=1, max_length=128),
+    hotkey: str = Depends(verify_publisher),
     vram_available_bytes: int = Query(0, ge=0),
 ) -> dict:
     """Heartbeat ping from a prover node."""
