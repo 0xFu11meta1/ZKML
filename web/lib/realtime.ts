@@ -154,3 +154,73 @@ export function useSSE(url: string, enabled: boolean = true) {
 
   return { data, isConnected };
 }
+
+/**
+ * Hook for real-time proof job status updates via SSE.
+ *
+ * Connects to `GET /proofs/jobs/{taskId}/stream` and returns the latest
+ * job status.  Falls back to the `useSSE` generic hook under the hood.
+ * The stream auto-closes when the job reaches a terminal status.
+ *
+ * Usage:
+ *   const { job, isConnected, isDone } = useProofJobSSE(taskId);
+ */
+export function useProofJobSSE(taskId: string | undefined) {
+  const baseUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/api/proofs/jobs`
+      : "";
+  const url = taskId ? `${baseUrl}/${taskId}/stream` : "";
+
+  const [job, setJob] = useState<any>(null);
+  const [isDone, setIsDone] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+
+  useEffect(() => {
+    if (!taskId || !url) return;
+
+    const source = new EventSource(url);
+
+    source.onopen = () => setIsConnected(true);
+
+    source.onmessage = (event) => {
+      try {
+        setJob(JSON.parse(event.data));
+      } catch {
+        // ignore non-JSON
+      }
+    };
+
+    source.addEventListener("done", (event: MessageEvent) => {
+      try {
+        setJob(JSON.parse(event.data));
+      } catch {
+        // ignore
+      }
+      setIsDone(true);
+      source.close();
+    });
+
+    source.addEventListener("timeout", () => {
+      setIsDone(true);
+      source.close();
+    });
+
+    source.addEventListener("error", () => {
+      setIsConnected(false);
+      source.close();
+    });
+
+    source.onerror = () => {
+      setIsConnected(false);
+      source.close();
+    };
+
+    return () => {
+      source.close();
+      setIsConnected(false);
+    };
+  }, [taskId, url]);
+
+  return { job, isConnected, isDone };
+}

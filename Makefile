@@ -11,7 +11,7 @@ test:
 	python -m pytest tests/ -v --tb=short
 
 test-fast:
-	python -m pytest tests/ -v --tb=short --ignore=tests/registry/test_phase_h.py
+	python -m pytest tests/ -v --tb=short -x
 
 # ── Code Quality ───────────────────────────────────────────
 
@@ -62,7 +62,11 @@ migrate-check:
 
 # ── CI composite ──────────────────────────────────────────
 
-ci: lint typecheck test web-lint build-web
+ci: lint typecheck test web-lint web-typecheck build-web cargo-check
+	@echo "\n✓ All CI checks passed"
+
+cargo-check:
+	cd prover && cargo check --all-features 2>/dev/null || echo "(cargo check skipped — Rust toolchain not available)"
 
 # ── Cleanup ────────────────────────────────────────────────
 

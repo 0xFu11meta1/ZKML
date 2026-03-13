@@ -120,6 +120,14 @@ async def upload_circuit(
     if body.num_constraints > settings.max_circuit_constraints:
         raise HTTPException(400, f"Circuit exceeds max constraints ({settings.max_circuit_constraints})")
 
+    # Per-publisher upload rate limit: max 50 circuits per publisher
+    publisher_circuit_count = (await db.execute(
+        select(func.count()).select_from(CircuitRow)
+        .where(CircuitRow.publisher_hotkey == publisher_hotkey)
+    )).scalar() or 0
+    if publisher_circuit_count >= 50:
+        raise HTTPException(429, "Upload limit reached (max 50 circuits per publisher)")
+
     # Validate IPFS CID format
     if not _CID_RE.match(body.ipfs_cid):
         raise HTTPException(400, f"Invalid IPFS CID format: {body.ipfs_cid[:40]}")
@@ -181,8 +189,8 @@ async def list_circuits(
     search: str | None = None,
 ) -> dict:
     """List circuits with optional filters."""
-    query = select(CircuitRow)
-    count_query = select(func.count()).select_from(CircuitRow)
+    query = select(CircuitRow).where(CircuitRow.deleted_at.is_(None))
+    count_query = select(func.count()).select_from(CircuitRow).where(CircuitRow.deleted_at.is_(None))
 
     if proof_type:
         query = query.where(CircuitRow.proof_type == proof_type)

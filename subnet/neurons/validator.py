@@ -20,6 +20,7 @@ import bittensor as bt
 import numpy as np
 
 from subnet.base.neuron import BaseNeuron
+from subnet.base.checkpoint import Checkpoint
 from subnet.protocol.synapses import (
     CapabilityPingSynapse,
     ProofRequestSynapse,
@@ -59,15 +60,81 @@ class ValidatorNeuron(BaseNeuron):
         self.alpha = self.config.neuron.moving_average_alpha
         self.reward_weights = ProverRewardWeights()
 
+        # Configurable scoring baselines — override via neuron config
+        self._speed_baseline_ms: float = getattr(
+            self.config.neuron, "speed_baseline_ms", 60_000
+        )  # ms — proofs faster than this score highly
+        self._throughput_baseline: int = getattr(
+            self.config.neuron, "throughput_baseline", 10
+        )  # proof count — normalize throughput against this
+
         # Prover tracking
         self._provers: dict[int, ProverInfo] = {}  # uid → info
         self._pending_jobs: dict[str, dict] = {}  # job_id → state
         self._step = 0
+        self._MAX_COMPLETED_AGE = 600  # seconds before evicting finished jobs
 
         # Intervals
         self.PING_INTERVAL_STEPS = 5  # Ping every 5 steps (~60s)
         self.WEIGHT_SET_INTERVAL = 100
         self._steps_since_weight_set = 0
+
+        # State persistence
+        self._checkpoint = Checkpoint("validator")
+        self._restore_state()
+
+    # ── State persistence ────────────────────────────────────
+
+    def _restore_state(self) -> None:
+        """Load last checkpoint if available."""
+        state = self._checkpoint.load()
+        if not state:
+            return
+        # Restore prover info
+        for uid_str, info in state.get("provers", {}).items():
+            uid = int(uid_str)
+            self._provers[uid] = ProverInfo(
+                uid=uid,
+                hotkey=info.get("hotkey", ""),
+                gpu_name=info.get("gpu_name", ""),
+                gpu_backend=info.get("gpu_backend", "cpu"),
+                gpu_count=info.get("gpu_count", 0),
+                vram_bytes=info.get("vram_bytes", 0),
+                benchmark_score=info.get("benchmark_score", 0.0),
+                supported_proofs=info.get("supported_proofs", ""),
+                current_load=0.0,  # reset load on restart
+                total_proofs=info.get("total_proofs", 0),
+                last_ping=0.0,
+                online=False,  # require fresh ping
+            )
+        # Restore scores array
+        if "scores" in state:
+            import json
+            score_list = state["scores"]
+            for i, val in enumerate(score_list):
+                if i < len(self.scores):
+                    self.scores[i] = float(val)
+        logger.info("Restored state: %d provers, scores loaded", len(self._provers))
+
+    def _save_state(self, *, force: bool = False) -> None:
+        """Checkpoint current state."""
+        provers_data = {}
+        for uid, p in self._provers.items():
+            provers_data[str(uid)] = {
+                "hotkey": p.hotkey,
+                "gpu_name": p.gpu_name,
+                "gpu_backend": p.gpu_backend,
+                "gpu_count": p.gpu_count,
+                "vram_bytes": p.vram_bytes,
+                "benchmark_score": p.benchmark_score,
+                "supported_proofs": p.supported_proofs,
+                "total_proofs": p.total_proofs,
+            }
+        self._checkpoint.save({
+            "provers": provers_data,
+            "scores": self.scores.tolist(),
+            "step": self._step,
+        }, force=force)
 
     # ── Main loop ────────────────────────────────────────────
 
@@ -107,6 +174,9 @@ class ValidatorNeuron(BaseNeuron):
         if self._steps_since_weight_set >= self.WEIGHT_SET_INTERVAL:
             self._set_weights()
             self._steps_since_weight_set = 0
+
+        # 7. Periodic checkpoint
+        self._save_state()
 
     # ── Capability pinging ───────────────────────────────────
 
@@ -286,6 +356,16 @@ class ValidatorNeuron(BaseNeuron):
             if self._pending_jobs[jid]["status"] not in ("completed", "failed"):
                 self._pending_jobs[jid]["status"] = "completed"
 
+        # Evict old completed/failed jobs to prevent memory leaks
+        now = time.monotonic()
+        stale = [
+            jid for jid, job in self._pending_jobs.items()
+            if job["status"] in ("completed", "failed")
+            and now - job.get("started_at", now) > self._MAX_COMPLETED_AGE
+        ]
+        for jid in stale:
+            del self._pending_jobs[jid]
+
     async def _verify_and_finalize_job(
         self, job_id: str, job: dict, partition_done: dict[int, dict],
     ) -> None:
@@ -304,8 +384,16 @@ class ValidatorNeuron(BaseNeuron):
             if not result or not result.get("proof_fragment"):
                 continue
 
-            # Upload fragment to IPFS (simulated — in production this calls IPFS)
-            fragment_hash = hashlib.sha256(result["proof_fragment"]).hexdigest()
+            # Compute content hash for integrity verification
+            fragment_data = result["proof_fragment"]
+            if isinstance(fragment_data, str):
+                fragment_data = fragment_data.encode()
+            fragment_hash = hashlib.sha256(fragment_data).hexdigest()
+
+            # The proof_fragment should already have been uploaded to IPFS by the miner.
+            # Use the commitment (which should be the IPFS CID) for verification.
+            # If no CID was provided, use the content hash as a fallback reference.
+            proof_cid = result.get("commitment") or fragment_hash
 
             # Ask a different prover to verify
             generating_uid = part["prover_uid"]
@@ -316,9 +404,10 @@ class ValidatorNeuron(BaseNeuron):
 
             verifier = verifiers[0]
             verify_synapse = ProofVerifySynapse(
-                proof_cid=fragment_hash,
+                proof_cid=proof_cid,
                 circuit_cid=job["circuit_cid"],
                 proof_system=job["proof_system"],
+                expected_hash=fragment_hash,
             )
             try:
                 responses = await self.dendrite(
@@ -377,9 +466,9 @@ class ValidatorNeuron(BaseNeuron):
             total = successful + failed
             correctness = successful / max(total, 1)
             avg_speed_ms = total_time_ms / max(proof_count, 1)
-            # Speed score: faster = higher (normalize against 60s baseline)
-            speed = max(0.0, 1.0 - (avg_speed_ms / 60_000))
-            throughput = min(1.0, proof_count / 10.0)  # Normalize against 10 proofs
+            # Speed score: faster = higher (normalize against configurable baseline)
+            speed = max(0.0, 1.0 - (avg_speed_ms / self._speed_baseline_ms))
+            throughput = min(1.0, proof_count / max(self._throughput_baseline, 1))
             reliability = 1.0 if prover.online and total > 0 else 0.0
             # GPU efficiency bonus
             efficiency = min(1.0, prover.benchmark_score / 100.0)
@@ -418,7 +507,18 @@ class ValidatorNeuron(BaseNeuron):
                     ).scalar_one_or_none()
                     if row:
                         row.benchmark_score = score.total(self.reward_weights) * 100
-                    # If row doesn't exist, prover hasn't registered via API yet
+                    else:
+                        # Prover hasn't registered via API — create a stub row
+                        row = ProverCapabilityRow(
+                            hotkey=prover.hotkey,
+                            gpu_name=prover.gpu_name,
+                            gpu_backend=prover.gpu_backend,
+                            gpu_count=prover.gpu_count,
+                            vram_total_bytes=prover.vram_bytes,
+                            benchmark_score=score.total(self.reward_weights) * 100,
+                            online=prover.online,
+                        )
+                        db.add(row)
                 await db.commit()
         except Exception as exc:
             logger.debug("Registry score sync failed (non-critical): %s", exc)
@@ -466,7 +566,8 @@ class ValidatorNeuron(BaseNeuron):
                 step += 1
                 time.sleep(12 * self.config.neuron.epoch_length)
         except KeyboardInterrupt:
-            logger.info("Validator shutting down")
+            logger.info("Validator shutting down — saving state")
+            self._save_state(force=True)
 
 
 def main() -> None:

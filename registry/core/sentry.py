@@ -8,6 +8,15 @@ import os
 logger = logging.getLogger(__name__)
 
 
+def _get_version() -> str:
+    """Resolve package version from importlib.metadata."""
+    try:
+        from importlib.metadata import version
+        return f"modelionn@{version('modelionn')}"
+    except Exception:
+        return "modelionn@0.0.0-unknown"
+
+
 def init_sentry() -> None:
     """Configure Sentry SDK if SENTRY_DSN is set. No-op otherwise."""
     dsn = os.environ.get("SENTRY_DSN", "")
@@ -24,7 +33,7 @@ def init_sentry() -> None:
             traces_sample_rate=float(os.environ.get("SENTRY_TRACES_RATE", "0.1")),
             profiles_sample_rate=float(os.environ.get("SENTRY_PROFILES_RATE", "0.1")),
             environment=os.environ.get("SENTRY_ENVIRONMENT", "development"),
-            release=os.environ.get("SENTRY_RELEASE", "modelionn@0.1.0"),
+            release=os.environ.get("SENTRY_RELEASE", _get_version()),
             integrations=[SqlalchemyIntegration()],
         )
         logger.info("Sentry initialised (env=%s)", os.environ.get("SENTRY_ENVIRONMENT", "dev"))

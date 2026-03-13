@@ -34,6 +34,18 @@ impl ProverBackend for PlonkBackend {
 
         let gpu_backend = self.gpu_manager.best_device().map(|d| d.backend);
 
+        // Configure CUDA for GPU-accelerated NTT/MSM if available
+        #[cfg(feature = "cuda")]
+        if let Some(device) = self.gpu_manager.best_device() {
+            if device.backend == GpuBackendType::Cuda {
+                if let Err(e) = icicle_cuda_runtime::device::set_device(device.device_index as i32) {
+                    log::warn!("Failed to set CUDA device {}: {:?}, falling back to CPU", device.device_index, e);
+                } else {
+                    info!("PLONK: using CUDA device {} for NTT/MSM acceleration", device.device_index);
+                }
+            }
+        }
+
         #[cfg(feature = "plonk")]
         {
             let circuit_data: PlonkCircuitData = bincode::deserialize(&circuit.data)
@@ -49,6 +61,7 @@ impl ProverBackend for PlonkBackend {
             info!("PLONK: proof generated in {}ms ({} bytes)", elapsed, proof_size);
 
             return Ok(Proof {
+                version: PROOF_FORMAT_VERSION,
                 proof_system: ProofSystem::Plonk,
                 data: proof_bytes,
                 public_inputs: witness.public_inputs.clone(),

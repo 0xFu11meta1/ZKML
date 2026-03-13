@@ -69,6 +69,9 @@ export function useUploadCircuit() {
   return useMutation({
     mutationFn: api.uploadCircuit,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["circuits"] }),
+    onError: (error: Error) => {
+      console.error("Upload circuit failed:", error.message);
+    },
   });
 }
 
@@ -110,6 +113,9 @@ export function useRequestProof() {
   return useMutation({
     mutationFn: api.requestProof,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["proofJobs"] }),
+    onError: (error: Error) => {
+      console.error("Request proof failed:", error.message);
+    },
   });
 }
 
@@ -129,6 +135,9 @@ export function useVerifyProof() {
   return useMutation({
     mutationFn: api.verifyProof,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["proofs"] }),
+    onError: (error: Error) => {
+      console.error("Verify proof failed:", error.message);
+    },
   });
 }
 
@@ -155,5 +164,65 @@ export function useProver(hotkey: string) {
     queryKey: ["prover", hotkey],
     queryFn: () => api.getProver(hotkey),
     enabled: !!hotkey,
+  });
+}
+
+// ── Organizations ───────────────────────────────────────────
+
+export function useMyOrgs() {
+  return useQuery({
+    queryKey: ["myOrgs"],
+    queryFn: () => api.listMyOrgs(),
+  });
+}
+
+export function useOrg(slug: string) {
+  return useQuery({
+    queryKey: ["org", slug],
+    queryFn: () => api.getOrg(slug),
+    enabled: !!slug,
+  });
+}
+
+export function useCreateOrg() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.createOrg,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["myOrgs"] }),
+  });
+}
+
+export function useOrgMembers(slug: string, page?: number) {
+  return useQuery({
+    queryKey: ["orgMembers", slug, page],
+    queryFn: () => api.listOrgMembers(slug, { page }),
+    enabled: !!slug,
+  });
+}
+
+export function useAddOrgMember(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { hotkey: string; role: string }) =>
+      api.addOrgMember(slug, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["orgMembers", slug] }),
+  });
+}
+
+export function useRemoveOrgMember(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (hotkey: string) => api.removeOrgMember(slug, hotkey),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["orgMembers", slug] }),
+  });
+}
+
+// ── Search ──────────────────────────────────────────────────
+
+export function useSearchCircuits(q: string, page?: number) {
+  return useQuery({
+    queryKey: ["searchCircuits", q, page],
+    queryFn: () => api.searchCircuits({ q, page }),
+    enabled: q.length > 0,
   });
 }

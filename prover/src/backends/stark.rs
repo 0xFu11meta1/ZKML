@@ -50,6 +50,7 @@ impl ProverBackend for StarkBackend {
             info!("STARK: proof generated in {}ms ({} bytes)", elapsed, proof_size);
 
             return Ok(Proof {
+                version: PROOF_FORMAT_VERSION,
                 proof_system: ProofSystem::Stark,
                 data: proof_bytes,
                 public_inputs: witness.public_inputs.clone(),

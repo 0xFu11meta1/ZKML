@@ -120,6 +120,7 @@ class ProofVerifySynapse(bt.Synapse):
     verification_key_cid: str = ""          # IPFS CID of the verification key
     public_inputs_json: str = ""            # JSON-serialized public inputs
     proof_system: str = "groth16"
+    expected_hash: str = ""                 # SHA256 of the expected proof data for integrity check
 
     # Response
     valid: bool = False

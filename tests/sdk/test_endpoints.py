@@ -380,3 +380,161 @@ class TestGetOrg:
         with patch.object(c, "_get_http", return_value=mock_http):
             with pytest.raises(NotFoundError):
                 c.get_org("nonexistent")
+
+
+# ── create_org ───────────────────────────────────────────────
+
+class TestCreateOrg:
+    def test_success(self):
+        data = {"id": 1, "slug": "new-org", "name": "New Org"}
+        c, mock_http = _client_with_mock(
+            _mock_response(json_data=data), hotkey="5FCreator",
+        )
+        with patch.object(c, "_get_http", return_value=mock_http):
+            result = c.create_org(name="New Org", slug="new-org")
+        assert result["slug"] == "new-org"
+        call_kwargs = mock_http.request.call_args
+        body = call_kwargs.kwargs.get("json") or call_kwargs[1].get("json", {})
+        assert body["name"] == "New Org"
+        assert body["slug"] == "new-org"
+
+
+# ── list_members ─────────────────────────────────────────────
+
+class TestListMembers:
+    def test_success(self):
+        data = {"items": [{"hotkey": "5FM1", "role": "admin"}], "total": 1, "page": 1, "page_size": 20}
+        c, mock_http = _client_with_mock(_mock_response(json_data=data))
+        with patch.object(c, "_get_http", return_value=mock_http):
+            result = c.list_members("my-org")
+        assert result["total"] == 1
+        url = mock_http.request.call_args[0][1]
+        assert "/orgs/my-org/members" in url
+
+
+# ── add_member ───────────────────────────────────────────────
+
+class TestAddMember:
+    def test_success(self):
+        data = {"hotkey": "5FNew", "role": "editor"}
+        c, mock_http = _client_with_mock(
+            _mock_response(json_data=data), hotkey="5FAdmin",
+        )
+        with patch.object(c, "_get_http", return_value=mock_http):
+            result = c.add_member("my-org", hotkey="5FNew", role="editor")
+        assert result["role"] == "editor"
+
+
+# ── update_member_role ───────────────────────────────────────
+
+class TestUpdateMemberRole:
+    def test_success(self):
+        data = {"hotkey": "5FM1", "role": "admin"}
+        c, mock_http = _client_with_mock(
+            _mock_response(json_data=data), hotkey="5FAdmin",
+        )
+        with patch.object(c, "_get_http", return_value=mock_http):
+            result = c.update_member_role("my-org", "5FM1", role="admin")
+        assert result["role"] == "admin"
+        url = mock_http.request.call_args[0][1]
+        assert "/orgs/my-org/members/5FM1" in url
+
+
+# ── remove_member ────────────────────────────────────────────
+
+class TestRemoveMember:
+    def test_success(self):
+        c, mock_http = _client_with_mock(
+            _mock_response(status_code=204), hotkey="5FAdmin",
+        )
+        with patch.object(c, "_get_http", return_value=mock_http):
+            c.remove_member("my-org", "5FM1")
+        assert mock_http.request.call_args[0][0] == "DELETE"
+
+
+# ── create_api_key ───────────────────────────────────────────
+
+class TestCreateApiKey:
+    def test_success(self):
+        data = {"id": 1, "key": "mnn_abc", "label": "ci", "daily_limit": 500}
+        c, mock_http = _client_with_mock(
+            _mock_response(json_data=data), hotkey="5FUser",
+        )
+        with patch.object(c, "_get_http", return_value=mock_http):
+            result = c.create_api_key(label="ci", daily_limit=500)
+        assert result["key"] == "mnn_abc"
+        body = mock_http.request.call_args.kwargs.get("json", {})
+        assert body["label"] == "ci"
+        assert body["daily_limit"] == 500
+
+
+# ── list_api_keys ────────────────────────────────────────────
+
+class TestListApiKeys:
+    def test_success(self):
+        data = [{"id": 1, "label": "a"}, {"id": 2, "label": "b"}]
+        c, mock_http = _client_with_mock(
+            _mock_response(json_data=data), hotkey="5FUser",
+        )
+        with patch.object(c, "_get_http", return_value=mock_http):
+            result = c.list_api_keys()
+        assert len(result) == 2
+
+
+# ── revoke_api_key ───────────────────────────────────────────
+
+class TestRevokeApiKey:
+    def test_success(self):
+        c, mock_http = _client_with_mock(
+            _mock_response(status_code=204), hotkey="5FUser",
+        )
+        with patch.object(c, "_get_http", return_value=mock_http):
+            c.revoke_api_key(42)
+        url = mock_http.request.call_args[0][1]
+        assert "/api-keys/42" in url
+
+
+# ── list_audit_logs ──────────────────────────────────────────
+
+class TestListAuditLogs:
+    def test_basic(self):
+        data = {"items": [{"id": 1, "action": "org.created"}], "total": 1, "page": 1, "page_size": 50}
+        c, mock_http = _client_with_mock(
+            _mock_response(json_data=data), hotkey="5FAudit",
+        )
+        with patch.object(c, "_get_http", return_value=mock_http):
+            result = c.list_audit_logs()
+        assert result["total"] == 1
+        # Should send auth headers
+        headers = mock_http.request.call_args.kwargs.get("headers", {})
+        assert "x-hotkey" in headers
+
+    def test_with_filters(self):
+        data = {"items": [], "total": 0, "page": 1, "page_size": 50}
+        c, mock_http = _client_with_mock(
+            _mock_response(json_data=data), hotkey="5FA",
+        )
+        with patch.object(c, "_get_http", return_value=mock_http):
+            c.list_audit_logs(action="org.created", resource_type="org", actor_hotkey="5FM")
+        params = mock_http.request.call_args.kwargs.get("params", {})
+        assert params["action"] == "org.created"
+        assert params["resource_type"] == "org"
+        assert params["actor_hotkey"] == "5FM"
+
+
+# ── export_audit_csv ─────────────────────────────────────────
+
+class TestExportAuditCSV:
+    def test_success(self):
+        csv_bytes = b"id,action\n1,org.created\n"
+        c, mock_http = _client_with_mock(
+            _mock_response(status_code=200, json_data=None, headers={"content-type": "text/csv"}),
+            hotkey="5FA",
+        )
+        mock_http.request.return_value.content = csv_bytes
+        with patch.object(c, "_get_http", return_value=mock_http):
+            result = c.export_audit_csv(action="org.created", limit=100)
+        assert result == csv_bytes
+        params = mock_http.request.call_args.kwargs.get("params", {})
+        assert params["action"] == "org.created"
+        assert params["limit"] == 100

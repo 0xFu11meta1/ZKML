@@ -71,9 +71,15 @@ pub struct Witness {
     pub public_inputs: Vec<u8>,
 }
 
+/// Current proof format version.
+pub const PROOF_FORMAT_VERSION: u32 = 1;
+
 /// A generated zero-knowledge proof.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Proof {
+    /// Proof format version (for forward/backward compatibility)
+    #[serde(default = "default_proof_version")]
+    pub version: u32,
     /// Proof system used
     pub proof_system: ProofSystem,
     /// Serialized proof bytes
@@ -86,6 +92,10 @@ pub struct Proof {
     pub proof_size_bytes: u64,
     /// GPU backend used (if any)
     pub gpu_backend: Option<GpuBackendType>,
+}
+
+fn default_proof_version() -> u32 {
+    PROOF_FORMAT_VERSION
 }
 
 /// A partition describes a sub-circuit fragment for distributed proving.

@@ -33,6 +33,7 @@ async def _create_circuit(client: AsyncClient, **overrides) -> dict:
         "circuit_type": "general",
         "num_constraints": 50000,
         "ipfs_cid": _VALID_CID,
+        "verification_key_cid": _VALID_CID,
     }
     defaults.update(overrides)
     resp = await client.post("/circuits", json=defaults, headers=_auth())
@@ -91,6 +92,7 @@ class TestRequestProof:
             name="large-circ",
             num_constraints=50_000_000,
             ipfs_cid="QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn",
+            verification_key_cid="QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn",
         )
         resp = await client.post(
             "/proofs/jobs",
@@ -100,6 +102,21 @@ class TestRequestProof:
         assert resp.status_code == 202
         data = resp.json()
         assert data["num_partitions"] > 1
+
+    async def test_request_missing_verification_key_400(self, client: AsyncClient):
+        """Circuit without a verification_key_cid should be rejected."""
+        circuit = await _create_circuit(
+            client,
+            name="no-vk-circuit",
+            verification_key_cid=None,
+        )
+        resp = await client.post(
+            "/proofs/jobs",
+            json=_proof_request(circuit["id"]),
+            headers=_auth(),
+        )
+        assert resp.status_code == 400
+        assert "verification key" in resp.json()["detail"].lower()
 
 
 # ── Get proof job ────────────────────────────────────────────
@@ -193,7 +210,7 @@ class TestListProofJobs:
 
 class TestListProofs:
     async def test_list_proofs_empty(self, client: AsyncClient):
-        resp = await client.get("/proofs")
+        resp = await client.get("/proofs", headers=_auth())
         assert resp.status_code == 200
         data = resp.json()
         assert data["items"] == []

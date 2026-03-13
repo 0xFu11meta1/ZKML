@@ -411,3 +411,155 @@ class ModelionnClient:
             "DELETE", f"{self._url}/api-keys/{key_id}",
             headers=self._auth_headers(),
         )
+
+    # ── Audit Logs ───────────────────────────────────────────
+
+    def list_audit_logs(
+        self,
+        *,
+        action: str | None = None,
+        resource_type: str | None = None,
+        actor_hotkey: str | None = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> dict[str, Any]:
+        """List audit logs visible to the authenticated user (scoped to their orgs)."""
+        params: dict[str, Any] = {"page": page, "page_size": page_size}
+        if action:
+            params["action"] = action
+        if resource_type:
+            params["resource_type"] = resource_type
+        if actor_hotkey:
+            params["actor_hotkey"] = actor_hotkey
+        resp = self._request_with_retry(
+            "GET", f"{self._url}/audit",
+            params=params,
+            headers=self._auth_headers(),
+        )
+        return resp.json()
+
+    def export_audit_csv(
+        self,
+        *,
+        action: str | None = None,
+        resource_type: str | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        limit: int = 10_000,
+    ) -> bytes:
+        """Export audit logs as CSV bytes (scoped to caller's orgs)."""
+        params: dict[str, Any] = {"limit": limit}
+        if action:
+            params["action"] = action
+        if resource_type:
+            params["resource_type"] = resource_type
+        if from_date:
+            params["from_date"] = from_date
+        if to_date:
+            params["to_date"] = to_date
+        resp = self._request_with_retry(
+            "GET", f"{self._url}/audit/export",
+            params=params,
+            headers=self._auth_headers(),
+        )
+        return resp.content
+
+    # ── Streaming downloads ──────────────────────────────────
+
+    def download_proof(
+        self,
+        proof_id: int,
+        output_path: str | os.PathLike[str],
+        *,
+        chunk_size: int = 64 * 1024,
+    ) -> int:
+        """Stream-download proof data to a local file.
+
+        Avoids holding large proofs (>100MB) in memory.
+        Returns the number of bytes written.
+        """
+        proof = self.get_proof(proof_id)
+        cid = proof.get("proof_data_cid")
+        if not cid:
+            raise ModelionnError(f"Proof {proof_id} has no proof_data_cid")
+
+        url = f"{self._url}/proofs/{proof_id}/download"
+        client = self._get_http(timeout=300)
+        written = 0
+        with client.stream("GET", url, headers=self._auth_headers()) as stream:
+            raise_for_status(stream.status_code, "")
+            with open(output_path, "wb") as f:
+                for chunk in stream.iter_bytes(chunk_size):
+                    f.write(chunk)
+                    written += len(chunk)
+        logger.info("Downloaded proof %d → %s (%d bytes)", proof_id, output_path, written)
+        return written
+
+    # ── Batch operations ─────────────────────────────────────
+
+    def batch_upload_circuits(
+        self,
+        circuits: list[dict[str, Any]],
+        *,
+        max_concurrency: int = 5,
+    ) -> list[dict[str, Any]]:
+        """Upload multiple circuits concurrently.
+
+        Each dict in *circuits* must contain the keyword arguments for
+        :meth:`upload_circuit` (name, version, proof_type, etc.).
+
+        Returns a list of results in the same order.  Each entry is either
+        the API response dict or a dict with ``{"error": "<message>"}``.
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        results: list[dict[str, Any] | None] = [None] * len(circuits)
+
+        def _upload(idx: int, kwargs: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+            try:
+                return idx, self.upload_circuit(**kwargs)
+            except Exception as exc:
+                return idx, {"error": str(exc)}
+
+        with ThreadPoolExecutor(max_workers=max_concurrency) as pool:
+            futures = {
+                pool.submit(_upload, i, c): i for i, c in enumerate(circuits)
+            }
+            for future in as_completed(futures):
+                idx, result = future.result()
+                results[idx] = result
+
+        return results  # type: ignore[return-value]
+
+    def batch_request_proofs(
+        self,
+        requests: list[dict[str, Any]],
+        *,
+        max_concurrency: int = 5,
+    ) -> list[dict[str, Any]]:
+        """Request multiple proof jobs concurrently.
+
+        Each dict must contain keyword arguments for :meth:`request_proof`
+        (circuit_id, witness_cid, etc.).
+
+        Returns a list of results in the same order.
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        results: list[dict[str, Any] | None] = [None] * len(requests)
+
+        def _request(idx: int, kwargs: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+            try:
+                return idx, self.request_proof(**kwargs)
+            except Exception as exc:
+                return idx, {"error": str(exc)}
+
+        with ThreadPoolExecutor(max_workers=max_concurrency) as pool:
+            futures = {
+                pool.submit(_request, i, r): i for i, r in enumerate(requests)
+            }
+            for future in as_completed(futures):
+                idx, result = future.result()
+                results[idx] = result
+
+        return results  # type: ignore[return-value]

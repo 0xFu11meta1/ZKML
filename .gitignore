@@ -21,4 +21,5 @@ htmlcov/
 .DS_Store
 web/.next/
 web/node_modules/
-prover/target/web/tsconfig.tsbuildinfo
+prover/target/
+web/tsconfig.tsbuildinfo

@@ -100,4 +100,59 @@ impl GpuManager {
     pub fn total_vram_available(&self) -> u64 {
         self.devices.iter().map(|d| d.vram_available).sum()
     }
+
+    /// Run multi-scalar multiplication on the best available GPU.
+    /// Falls back to CPU if no GPU is available.
+    /// Returns `Ok(())` with result written into `result` buffer, or an error string.
+    pub fn msm(
+        &self,
+        scalars: &[u8],
+        points: &[u8],
+        result: &mut [u8],
+    ) -> Result<(), String> {
+        if let Some(device) = self.best_device() {
+            match device.backend {
+                #[cfg(feature = "cuda")]
+                GpuBackendType::Cuda => {
+                    return cuda::cuda_msm(scalars, points, result, device.device_index);
+                }
+                #[cfg(target_os = "macos")]
+                GpuBackendType::Metal => {
+                    return metal::metal_msm(scalars, points, result, device.device_index);
+                }
+                GpuBackendType::Rocm => {
+                    return rocm::rocm_msm(scalars, points, result, device.device_index);
+                }
+                _ => {}
+            }
+        }
+        Err("no GPU available for MSM — use CPU fallback".to_string())
+    }
+
+    /// Run NTT (Number Theoretic Transform) on the best available GPU.
+    /// Falls back to CPU if no GPU is available.
+    pub fn ntt(
+        &self,
+        coefficients: &[u8],
+        result: &mut [u8],
+        inverse: bool,
+    ) -> Result<(), String> {
+        if let Some(device) = self.best_device() {
+            match device.backend {
+                #[cfg(feature = "cuda")]
+                GpuBackendType::Cuda => {
+                    return cuda::cuda_ntt(coefficients, result, device.device_index, inverse);
+                }
+                #[cfg(target_os = "macos")]
+                GpuBackendType::Metal => {
+                    return metal::metal_ntt(coefficients, result, device.device_index, inverse);
+                }
+                GpuBackendType::Rocm => {
+                    return rocm::rocm_ntt(coefficients, result, device.device_index, inverse);
+                }
+                _ => {}
+            }
+        }
+        Err("no GPU available for NTT — use CPU fallback".to_string())
+    }
 }

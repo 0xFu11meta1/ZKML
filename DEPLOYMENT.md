@@ -142,13 +142,13 @@ server {
 
 ## Troubleshooting
 
-| Symptom                            | Fix                                                                    |
-| ---------------------------------- | ---------------------------------------------------------------------- |
-| `RuntimeError: Default secret key` | Set `MODELIONN_SECRET_KEY` env var (min 32 chars)                      |
+| Symptom                            | Fix                                                                        |
+| ---------------------------------- | -------------------------------------------------------------------------- |
+| `RuntimeError: Default secret key` | Set `MODELIONN_SECRET_KEY` env var (min 32 chars)                          |
 | `DATABASE_URL must be set`         | Set `MODELIONN_DATABASE_URL` in `.env` — entrypoint validates before start |
-| Redis connection refused           | Check Redis container is healthy: `docker compose ps redis`            |
-| IPFS timeouts                      | Increase `MODELIONN_IPFS_TIMEOUT` or check IPFS node                   |
-| 403 on webhook endpoints           | Ensure user has org membership via `/orgs/{slug}/members`              |
-| 429 Too Many Requests              | Rate limit: 120 req/60s per client — check `Retry-After` header        |
-| CSRF validation failed             | `Origin` header must match server host, or use `Authorization: Bearer` |
-| Worker tasks stuck                 | Check Flower UI, restart workers with `docker compose restart worker`  |
+| Redis connection refused           | Check Redis container is healthy: `docker compose ps redis`                |
+| IPFS timeouts                      | Increase `MODELIONN_IPFS_TIMEOUT` or check IPFS node                       |
+| 403 on webhook endpoints           | Ensure user has org membership via `/orgs/{slug}/members`                  |
+| 429 Too Many Requests              | Rate limit: 120 req/60s per client — check `Retry-After` header            |
+| CSRF validation failed             | `Origin` header must match server host, or use `Authorization: Bearer`     |
+| Worker tasks stuck                 | Check Flower UI, restart workers with `docker compose restart worker`      |

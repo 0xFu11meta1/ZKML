@@ -48,6 +48,11 @@ class APIKeyAuthMiddleware(BaseHTTPMiddleware):
                 inc_counter(API_KEY_REJECTIONS)
                 return JSONResponse({"detail": "Invalid API key"}, status_code=401)
 
+            # Check expiration
+            if row.expires_at is not None and row.expires_at < datetime.now(timezone.utc):
+                inc_counter(API_KEY_REJECTIONS)
+                return JSONResponse({"detail": "API key has expired"}, status_code=401)
+
             if row.requests_today >= row.daily_limit:
                 inc_counter(API_KEY_REJECTIONS)
                 return JSONResponse({"detail": "Daily API key limit exceeded"}, status_code=429)

@@ -10,8 +10,33 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-app = typer.Typer(name="modelionn", help="Modelionn — GPU-Accelerated ZK Prover Network on Bittensor")
+
+def _version_str() -> str:
+    try:
+        from importlib.metadata import version
+        return version("modelionn")
+    except Exception:
+        return "0.0.0-unknown"
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"modelionn {_version_str()}")
+        raise typer.Exit()
+
+
+app = typer.Typer(
+    name="modelionn",
+    help="Modelionn — GPU-Accelerated ZK Prover Network on Bittensor",
+)
 console = Console()
+
+
+@app.callback()
+def main_callback(
+    version: bool = typer.Option(False, "--version", "-V", callback=_version_callback, is_eager=True, help="Show version and exit."),
+) -> None:
+    """Modelionn CLI — GPU-Accelerated ZK Prover Network on Bittensor."""
 
 # ── Config file support ──────────────────────────────────────
 
@@ -56,6 +81,22 @@ def _client(registry: str, hotkey: str):
 def _json_output(data: dict | list) -> None:
     """Print JSON to stdout for machine-readable output."""
     console.print_json(json_mod.dumps(data, default=str))
+
+
+import re
+
+_SS58_PATTERN = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{46,48}$")
+
+
+def _validate_hotkey(hotkey: str) -> str | None:
+    """Validate a Bittensor SS58 hotkey. Returns error message or None."""
+    if len(hotkey) < 8:
+        return "Hotkey too short — must be a valid SS58 address (46-48 characters)."
+    if len(hotkey) > 128:
+        return "Hotkey too long — maximum 128 characters."
+    if not _SS58_PATTERN.match(hotkey):
+        return "Invalid hotkey format — must be a valid SS58 address (base58 characters, 46-48 chars)."
+    return None
 
 
 # ── Info ─────────────────────────────────────────────────────
@@ -320,9 +361,11 @@ def login(
     if registry and not registry.startswith(("http://", "https://")):
         console.print("[red]Registry URL must start with http:// or https://[/]")
         raise typer.Exit(1)
-    if hotkey and len(hotkey) < 8:
-        console.print("[red]Hotkey looks too short — provide a valid Bittensor hotkey.[/]")
-        raise typer.Exit(1)
+    if hotkey:
+        err = _validate_hotkey(hotkey)
+        if err:
+            console.print(f"[red]{err}[/]")
+            raise typer.Exit(1)
 
     lines: list[str] = []
     if registry:
@@ -536,6 +579,95 @@ def audit_list(
             entry.get("created_at", "")[:19],
         )
     console.print(table)
+
+
+@app.command(name="completion")
+def show_completion(
+    install: bool = typer.Option(False, "--install", help="Install completion for current shell"),
+    show: bool = typer.Option(False, "--show", help="Show completion script"),
+    shell: str = typer.Option("", "--shell", help="Shell type (bash|zsh|fish|powershell)"),
+) -> None:
+    """Manage shell tab completion.
+
+    Run `modelionn completion --install` to enable tab completion for your shell.
+    """
+    import subprocess
+    import sys
+
+    if not install and not show:
+        console.print("Usage: modelionn completion --install  or  modelionn completion --show")
+        console.print("  --shell bash|zsh|fish|powershell  (auto-detected if omitted)")
+        raise typer.Exit()
+
+    # Auto-detect shell if not specified
+    if not shell:
+        parent = os.environ.get("SHELL", "")
+        if "zsh" in parent:
+            shell = "zsh"
+        elif "fish" in parent:
+            shell = "fish"
+        elif "bash" in parent:
+            shell = "bash"
+        else:
+            shell = "bash"
+
+    shell_map = {"bash": "bash", "zsh": "zsh", "fish": "fish", "powershell": "powershell"}
+    if shell not in shell_map:
+        console.print(f"[red]Unsupported shell: {shell}. Use bash, zsh, fish, or powershell.[/]")
+        raise typer.Exit(1)
+
+    prog = "modelionn"
+    env_var = f"_{prog.upper()}_COMPLETE"
+
+    if show:
+        result = subprocess.run(
+            [sys.executable, "-m", "cli.main"],
+            env={**os.environ, env_var: f"complete_{shell}"},
+            capture_output=True,
+            text=True,
+        )
+        console.print(result.stdout or result.stderr)
+    elif install:
+        if shell == "zsh":
+            comp_dir = Path.home() / ".zfunc"
+            comp_dir.mkdir(exist_ok=True)
+            comp_file = comp_dir / f"_{prog}"
+            result = subprocess.run(
+                [sys.executable, "-m", "cli.main"],
+                env={**os.environ, env_var: "complete_zsh"},
+                capture_output=True,
+                text=True,
+            )
+            comp_file.write_text(result.stdout)
+            console.print(f"[green]✓[/] Completion installed to {comp_file}")
+            console.print("  Add 'fpath=(~/.zfunc $fpath)' to ~/.zshrc if not already present, then restart shell.")
+        elif shell == "bash":
+            comp_dir = Path.home() / ".bash_completions"
+            comp_dir.mkdir(exist_ok=True)
+            comp_file = comp_dir / f"{prog}.sh"
+            result = subprocess.run(
+                [sys.executable, "-m", "cli.main"],
+                env={**os.environ, env_var: "complete_bash"},
+                capture_output=True,
+                text=True,
+            )
+            comp_file.write_text(result.stdout)
+            console.print(f"[green]✓[/] Completion installed to {comp_file}")
+            console.print(f"  Add 'source {comp_file}' to ~/.bashrc, then restart shell.")
+        elif shell == "fish":
+            comp_dir = Path.home() / ".config" / "fish" / "completions"
+            comp_dir.mkdir(parents=True, exist_ok=True)
+            comp_file = comp_dir / f"{prog}.fish"
+            result = subprocess.run(
+                [sys.executable, "-m", "cli.main"],
+                env={**os.environ, env_var: "complete_fish"},
+                capture_output=True,
+                text=True,
+            )
+            comp_file.write_text(result.stdout)
+            console.print(f"[green]✓[/] Completion installed to {comp_file}")
+        else:
+            console.print("[yellow]PowerShell completion: run 'modelionn completion --show --shell powershell' and add to $PROFILE[/]")
 
 
 if __name__ == "__main__":

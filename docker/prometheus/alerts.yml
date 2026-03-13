@@ -89,3 +89,31 @@ groups:
         annotations:
           summary: "High partition orphan/reassignment rate"
           description: "Many partitions are being reassigned due to prover failures."
+
+      - alert: HighProofQueueDepth
+        expr: modelionn_proof_jobs_queued > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Proof job queue depth is high"
+          description: "More than 100 proof jobs are queued — possibly insufficient prover capacity."
+
+      - alert: ProofP99LatencyHigh
+        expr: >
+          histogram_quantile(0.99, rate(modelionn_proof_latency_seconds_bucket[10m])) > 300
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P99 proof generation latency exceeds 5 minutes"
+          description: "The 99th percentile proof generation time is above 300 seconds."
+
+      - alert: CeleryWorkerDown
+        expr: celery_workers_online == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No Celery workers online"
+          description: "All Celery workers are offline — proof dispatch and aggregation tasks will not be processed."

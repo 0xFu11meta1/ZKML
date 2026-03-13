@@ -117,7 +117,7 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=http://registry:8000
       - NEXTAUTH_URL=http://localhost:3000
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET env var}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-dev-only-change-in-production-abc123}
     depends_on:
       registry:
         condition: service_healthy
@@ -144,7 +144,7 @@ services:
       - "3001:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD env var}
-      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/dashboard.json
     volumes:
       - ./grafana:/var/lib/grafana/dashboards:ro

@@ -60,6 +60,7 @@ pub fn aggregate_fragments(
     let proof_size_bytes = aggregated_data.len() as u64;
 
     Ok(Proof {
+        version: PROOF_FORMAT_VERSION,
         proof_system: circuit.proof_system,
         data: aggregated_data,
         public_inputs: Vec::new(), // Set by caller

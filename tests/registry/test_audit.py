@@ -30,15 +30,19 @@ async def _seed_audit_logs(client: AsyncClient):
 
 class TestListAuditLogs:
     async def test_list_empty(self, client: AsyncClient):
-        resp = await client.get("/audit")
+        resp = await client.get("/audit", headers=_auth())
         assert resp.status_code == 200
         data = resp.json()
         assert data["items"] == []
         assert data["total"] == 0
 
+    async def test_list_requires_auth(self, client: AsyncClient):
+        resp = await client.get("/audit")
+        assert resp.status_code == 422
+
     async def test_list_after_org_create(self, client: AsyncClient):
         await _seed_audit_logs(client)
-        resp = await client.get("/audit")
+        resp = await client.get("/audit", headers=_auth())
         assert resp.status_code == 200
         data = resp.json()
         assert data["total"] >= 1
@@ -47,21 +51,21 @@ class TestListAuditLogs:
 
     async def test_filter_by_action(self, client: AsyncClient):
         await _seed_audit_logs(client)
-        resp = await client.get("/audit?action=org.created")
+        resp = await client.get("/audit?action=org.created", headers=_auth())
         assert resp.status_code == 200
         for item in resp.json()["items"]:
             assert item["action"] == "org.created"
 
     async def test_filter_by_actor(self, client: AsyncClient):
         await _seed_audit_logs(client)
-        resp = await client.get(f"/audit?actor_hotkey={_HOTKEY}")
+        resp = await client.get(f"/audit?actor_hotkey={_HOTKEY}", headers=_auth())
         assert resp.status_code == 200
         for item in resp.json()["items"]:
             assert item["actor_hotkey"] == _HOTKEY
 
     async def test_pagination(self, client: AsyncClient):
         await _seed_audit_logs(client)
-        resp = await client.get("/audit?page=1&page_size=1")
+        resp = await client.get("/audit?page=1&page_size=1", headers=_auth())
         assert resp.status_code == 200
         data = resp.json()
         assert data["page"] == 1

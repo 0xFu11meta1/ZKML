@@ -3,13 +3,24 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Cpu, Zap, Network } from "lucide-react";
+import {
+  LayoutDashboard,
+  Cpu,
+  Zap,
+  Network,
+  Settings,
+  Building2,
+  Search,
+} from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/provers", label: "Prover Network", icon: Network },
   { href: "/circuits", label: "Circuits", icon: Cpu },
   { href: "/proofs", label: "Proof Jobs", icon: Zap },
+  { href: "/organizations", label: "Organizations", icon: Building2 },
+  { href: "/search", label: "Search", icon: Search },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar() {

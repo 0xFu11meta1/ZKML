@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from registry.core.deps import get_db
 from registry.core.security import verify_publisher
-from registry.models.database import AuditLogRow
+from registry.models.database import AuditLogRow, MembershipRow
 
 
 class AuditLogResponse(BaseModel):
@@ -40,6 +40,16 @@ class AuditLogList(BaseModel):
 router = APIRouter()
 
 
+async def _caller_org_ids(db: AsyncSession, hotkey: str) -> list[int]:
+    """Return org IDs the caller belongs to (any role)."""
+    rows = (await db.execute(
+        select(MembershipRow.org_id)
+        .join(MembershipRow.user)
+        .where(MembershipRow.user.has(hotkey=hotkey))
+    )).scalars().all()
+    return list(rows)
+
+
 @router.get("", response_model=AuditLogList)
 async def list_audit_logs(
     action: str | None = Query(None, description="Filter by action type"),
@@ -48,8 +58,15 @@ async def list_audit_logs(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
+    publisher: str = Depends(verify_publisher),
 ) -> AuditLogList:
-    base = select(AuditLogRow)
+    # Scope to caller's orgs — only logs with a matching org_id (or NULL org_id
+    # produced by the caller themselves) are visible.
+    org_ids = await _caller_org_ids(db, publisher)
+    base = select(AuditLogRow).where(
+        AuditLogRow.org_id.in_(org_ids) if org_ids
+        else AuditLogRow.actor_hotkey == publisher
+    )
     if action:
         base = base.where(AuditLogRow.action == action)
     if resource_type:
@@ -102,6 +119,12 @@ async def export_audit_csv(
     to avoid exporting extremely large result sets.
     """
     query = select(AuditLogRow).order_by(AuditLogRow.created_at.desc())
+    # Scope to caller's orgs
+    org_ids = await _caller_org_ids(db, publisher)
+    if org_ids:
+        query = query.where(AuditLogRow.org_id.in_(org_ids))
+    else:
+        query = query.where(AuditLogRow.actor_hotkey == publisher)
     if action:
         query = query.where(AuditLogRow.action == action)
     if resource_type:

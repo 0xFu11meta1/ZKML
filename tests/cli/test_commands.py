@@ -337,3 +337,224 @@ class TestLogin:
 
         result = runner.invoke(app, ["login"])
         assert result.exit_code == 1
+
+    def test_login_rejects_non_ss58_hotkey(self, tmp_path, monkeypatch):
+        """Hotkeys with invalid characters (non-base58) should be rejected."""
+        monkeypatch.setattr("cli.main._CONFIG_PATH", tmp_path / ".modelionn.toml")
+
+        result = runner.invoke(app, [
+            "login", "--hotkey", "0OIl0OIl0OIl0OIl0OIl0OIl0OIl0OIl0OIl0OIl0OIl0O",
+        ])
+        assert result.exit_code == 1
+
+
+# ── org subcommands ──────────────────────────────────────────
+
+class TestOrgList:
+    @patch("cli.main._client")
+    def test_org_list_table(self, mock_client_fn):
+        client = _mock_client(list_my_orgs=[
+            {"id": 1, "name": "Acme Labs", "slug": "acme-labs"},
+            {"id": 2, "name": "ZK Corp", "slug": "zk-corp"},
+        ])
+        mock_client_fn.return_value = client
+
+        result = runner.invoke(app, ["org", "list"])
+        assert result.exit_code == 0
+        assert "Acme Labs" in result.output
+        assert "zk-corp" in result.output
+
+    @patch("cli.main._client")
+    def test_org_list_json(self, mock_client_fn):
+        client = _mock_client(list_my_orgs=[{"id": 1, "name": "Acme", "slug": "acme"}])
+        mock_client_fn.return_value = client
+
+        result = runner.invoke(app, ["org", "list", "--json"])
+        assert result.exit_code == 0
+
+    @patch("cli.main._client")
+    def test_org_list_empty(self, mock_client_fn):
+        client = _mock_client(list_my_orgs=[])
+        mock_client_fn.return_value = client
+
+        result = runner.invoke(app, ["org", "list"])
+        assert result.exit_code == 0
+
+
+class TestOrgCreate:
+    @patch("cli.main._client")
+    def test_org_create_success(self, mock_client_fn):
+        client = _mock_client(create_org={"id": 10, "slug": "new-org"})
+        mock_client_fn.return_value = client
+
+        result = runner.invoke(app, [
+            "org", "create", "--name", "New Org", "--slug", "new-org",
+        ])
+        assert result.exit_code == 0
+        assert "10" in result.output
+        assert "new-org" in result.output
+
+
+class TestOrgMembers:
+    @patch("cli.main._client")
+    def test_org_members_table(self, mock_client_fn):
+        client = _mock_client(list_members={
+            "items": [
+                {"user_id": 1, "hotkey": "5FTestHotkey1234567890abcdef", "role": "admin"},
+                {"user_id": 2, "hotkey": "5FMemberHotkey90abcdef123456", "role": "viewer"},
+            ],
+        })
+        mock_client_fn.return_value = client
+
+        result = runner.invoke(app, ["org", "members", "acme-labs"])
+        assert result.exit_code == 0
+        assert "admin" in result.output
+
+    @patch("cli.main._client")
+    def test_org_members_json(self, mock_client_fn):
+        client = _mock_client(list_members={"items": []})
+        mock_client_fn.return_value = client
+
+        result = runner.invoke(app, ["org", "members", "acme-labs", "--json"])
+        assert result.exit_code == 0
+
+
+class TestOrgAddMember:
+    @patch("cli.main._client")
+    def test_add_member_success(self, mock_client_fn):
+        client = _mock_client(add_member={"role": "editor"})
+        mock_client_fn.return_value = client
+
+        result = runner.invoke(app, [
+            "org", "add-member", "acme-labs",
+            "--hotkey-member", "5FNewMemberHotkeyAbcdef123456",
+            "--role", "editor",
+        ])
+        assert result.exit_code == 0
+        assert "editor" in result.output
+
+
+class TestOrgRemoveMember:
+    @patch("cli.main._client")
+    def test_remove_member_success(self, mock_client_fn):
+        client = _mock_client(remove_member=None)
+        mock_client_fn.return_value = client
+
+        result = runner.invoke(app, [
+            "org", "remove-member", "acme-labs",
+            "--hotkey-member", "5FOldMemberHotkeyAbcdef123456",
+        ])
+        assert result.exit_code == 0
+        assert "Removed" in result.output
+
+
+# ── api-key subcommands ──────────────────────────────────────
+
+class TestApiKeyCreate:
+    @patch("cli.main._client")
+    def test_create_api_key(self, mock_client_fn):
+        client = _mock_client(create_api_key={
+            "key": "mk_test_abc123def456", "label": "ci-key", "daily_limit": 500,
+        })
+        mock_client_fn.return_value = client
+
+        result = runner.invoke(app, [
+            "api-key", "create", "--label", "ci-key", "--limit", "500",
+        ])
+        assert result.exit_code == 0
+        assert "mk_test_abc123def456" in result.output
+        assert "ci-key" in result.output
+
+    @patch("cli.main._client")
+    def test_create_api_key_defaults(self, mock_client_fn):
+        client = _mock_client(create_api_key={
+            "key": "mk_default_key", "label": "", "daily_limit": 1000,
+        })
+        mock_client_fn.return_value = client
+
+        result = runner.invoke(app, ["api-key", "create"])
+        assert result.exit_code == 0
+
+
+class TestApiKeyList:
+    @patch("cli.main._client")
+    def test_list_api_keys_table(self, mock_client_fn):
+        client = _mock_client(list_api_keys=[
+            {"id": 1, "label": "prod", "daily_limit": 5000,
+             "requests_today": 42, "created_at": "2025-01-15T00:00:00Z"},
+            {"id": 2, "label": "dev", "daily_limit": 100,
+             "requests_today": 0, "created_at": "2025-06-01T00:00:00Z"},
+        ])
+        mock_client_fn.return_value = client
+
+        result = runner.invoke(app, ["api-key", "list"])
+        assert result.exit_code == 0
+        assert "prod" in result.output
+        assert "5000" in result.output
+
+    @patch("cli.main._client")
+    def test_list_api_keys_json(self, mock_client_fn):
+        client = _mock_client(list_api_keys=[])
+        mock_client_fn.return_value = client
+
+        result = runner.invoke(app, ["api-key", "list", "--json"])
+        assert result.exit_code == 0
+
+
+class TestApiKeyRevoke:
+    @patch("cli.main._client")
+    def test_revoke_api_key(self, mock_client_fn):
+        client = _mock_client(revoke_api_key=None)
+        mock_client_fn.return_value = client
+
+        result = runner.invoke(app, ["api-key", "revoke", "42"])
+        assert result.exit_code == 0
+        assert "42" in result.output
+        assert "revoked" in result.output.lower()
+
+
+# ── audit subcommands ────────────────────────────────────────
+
+class TestAuditList:
+    @patch("cli.main._default_registry", return_value="http://localhost:8000")
+    @patch("sdk.client.ModelionnClient._request_with_retry")
+    def test_audit_list_table(self, mock_req, _):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "items": [
+                {"id": 1, "action": "circuit.uploaded", "actor_hotkey": "5FTestHotkey1234567890abcdef",
+                 "resource_type": "circuit", "resource_id": "42",
+                 "created_at": "2025-03-01T10:00:00Z"},
+            ],
+        }
+        mock_req.return_value = mock_resp
+
+        result = runner.invoke(app, ["audit", "list"])
+        assert result.exit_code == 0
+        assert "circuit.uploaded" in result.output
+
+    @patch("cli.main._default_registry", return_value="http://localhost:8000")
+    @patch("sdk.client.ModelionnClient._request_with_retry")
+    def test_audit_list_json(self, mock_req, _):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"items": []}
+        mock_req.return_value = mock_resp
+
+        result = runner.invoke(app, ["audit", "list", "--json"])
+        assert result.exit_code == 0
+
+    @patch("cli.main._default_registry", return_value="http://localhost:8000")
+    @patch("sdk.client.ModelionnClient._request_with_retry")
+    def test_audit_list_with_filters(self, mock_req, _):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"items": []}
+        mock_req.return_value = mock_resp
+
+        result = runner.invoke(app, [
+            "audit", "list", "--action", "proof.completed",
+            "--resource-type", "proof", "--actor", "5FTestHotkey",
+        ])
+        assert result.exit_code == 0
+        # Verify filters were passed as params
+        _, kwargs = mock_req.call_args
+        assert kwargs["params"]["action"] == "proof.completed"

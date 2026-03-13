@@ -86,3 +86,40 @@ class TestRevokeAPIKey:
         key_id = create_resp.json()["id"]
         resp = await client.delete(f"/api-keys/{key_id}", headers=_auth(_OTHER_HOTKEY))
         assert resp.status_code == 404
+
+
+class TestAPIKeyExpiration:
+    async def test_create_with_expiration(self, client: AsyncClient):
+        resp = await client.post(
+            "/api-keys",
+            json={"label": "expiring", "expires_in_days": 30},
+            headers=_auth(),
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["expires_at"] is not None
+
+    async def test_create_without_expiration(self, client: AsyncClient):
+        resp = await client.post(
+            "/api-keys",
+            json={"label": "permanent"},
+            headers=_auth(),
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["expires_at"] is None
+
+    async def test_expires_in_days_bounds(self, client: AsyncClient):
+        resp = await client.post(
+            "/api-keys",
+            json={"label": "bad", "expires_in_days": 0},
+            headers=_auth(),
+        )
+        assert resp.status_code == 422
+
+        resp = await client.post(
+            "/api-keys",
+            json={"label": "bad", "expires_in_days": 400},
+            headers=_auth(),
+        )
+        assert resp.status_code == 422

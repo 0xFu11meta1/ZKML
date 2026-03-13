@@ -56,7 +56,7 @@ make test-fast
 make test
 
 # Run a specific test file
-pytest tests/registry/test_phase_f.py -v
+pytest tests/registry/test_proofs.py -v
 ```
 
 Test breakdown:

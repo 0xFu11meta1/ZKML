@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -22,6 +23,7 @@ router = APIRouter()
 class APIKeyCreate(BaseModel):
     label: str = Field(default="", max_length=128)
     daily_limit: int = Field(default=1000, ge=1, le=100_000)
+    expires_in_days: int | None = Field(default=None, ge=1, le=365, description="Days until expiration (None = never)")
 
 
 class APIKeyResponse(BaseModel):
@@ -29,6 +31,7 @@ class APIKeyResponse(BaseModel):
     label: str
     daily_limit: int
     requests_today: int
+    expires_at: str | None = None
     created_at: str
     last_used_at: str | None = None
 
@@ -49,11 +52,16 @@ async def create_api_key(
     raw_key = f"mnn_{secrets.token_urlsafe(32)}"
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
 
+    expires_at = None
+    if body.expires_in_days is not None:
+        expires_at = datetime.now(timezone.utc) + timedelta(days=body.expires_in_days)
+
     row = APIKeyRow(
         key_hash=key_hash,
         hotkey=publisher,
         label=body.label,
         daily_limit=body.daily_limit,
+        expires_at=expires_at,
     )
     db.add(row)
     await db.commit()
@@ -64,6 +72,7 @@ async def create_api_key(
         label=row.label,
         daily_limit=row.daily_limit,
         requests_today=row.requests_today,
+        expires_at=row.expires_at.isoformat() if row.expires_at else None,
         created_at=row.created_at.isoformat(),
         last_used_at=row.last_used_at.isoformat() if row.last_used_at else None,
         key=raw_key,
@@ -94,6 +103,7 @@ async def list_api_keys(
             label=r.label,
             daily_limit=r.daily_limit,
             requests_today=r.requests_today,
+            expires_at=r.expires_at.isoformat() if r.expires_at else None,
             created_at=r.created_at.isoformat(),
             last_used_at=r.last_used_at.isoformat() if r.last_used_at else None,
         )

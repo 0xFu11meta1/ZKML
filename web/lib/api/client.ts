@@ -66,6 +66,13 @@ export interface Org {
   created_at: string;
 }
 
+export interface OrgMember {
+  user_id: number;
+  hotkey: string;
+  role: string;
+  joined_at: string;
+}
+
 export interface ApiKey {
   id: number;
   name: string;
@@ -171,6 +178,38 @@ export const api = {
 
   // Organizations
   listMyOrgs: () => request<Org[]>("/organizations/me"),
+
+  getOrg: (slug: string) => request<Org>(`/orgs/${slug}`),
+
+  createOrg: (body: { name: string; slug: string }) =>
+    request<Org>("/orgs", { method: "POST", body: JSON.stringify(body) }),
+
+  listOrgMembers: (slug: string, params?: { page?: number }) => {
+    const qs = new URLSearchParams();
+    qs.set("page", String(params?.page || 1));
+    return request<{ items: OrgMember[]; total: number }>(
+      `/orgs/${slug}/members?${qs}`,
+    );
+  },
+
+  addOrgMember: (slug: string, body: { hotkey: string; role: string }) =>
+    request<OrgMember>(
+      `/orgs/${slug}/members?hotkey=${encodeURIComponent(body.hotkey)}&role=${encodeURIComponent(body.role)}`,
+      {
+        method: "POST",
+      },
+    ),
+
+  removeOrgMember: (slug: string, hotkey: string) =>
+    request<void>(`/orgs/${slug}/members/${hotkey}`, { method: "DELETE" }),
+
+  // Search
+  searchCircuits: (params: { q: string; page?: number }) => {
+    const qs = new URLSearchParams();
+    qs.set("search", params.q);
+    qs.set("page", String(params.page || 1));
+    return request<{ items: Circuit[]; total: number }>(`/circuits?${qs}`);
+  },
 
   // API Keys
   listApiKeys: () => request<ApiKey[]>("/api-keys"),

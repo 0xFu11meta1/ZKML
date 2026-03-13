@@ -23,6 +23,10 @@ from registry.models.database import (
 router = APIRouter()
 
 _SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){1,126}[a-z0-9]$")
+_RESERVED_SLUGS = frozenset({
+    "api", "admin", "docs", "metrics", "health", "me", "settings",
+    "system", "internal", "static", "public", "auth", "login", "logout",
+})
 
 
 # ── Schemas ─────────────────────────────────────────────────
@@ -57,6 +61,12 @@ async def create_org(
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "Slug must be 3-128 lowercase alphanumeric characters or hyphens",
+        )
+
+    if body.slug in _RESERVED_SLUGS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Slug '{body.slug}' is reserved and cannot be used",
         )
 
     existing = await db.execute(
@@ -140,12 +150,15 @@ async def list_members(
     page: int = 1,
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
+    publisher: str = Depends(verify_publisher),
 ):
     from sqlalchemy import func
     page = max(page, 1)
     page_size = min(page_size, 100)
     offset = (page - 1) * page_size
     org = await _get_org_by_slug(db, slug)
+    # Verify the caller is a member of this org before listing
+    await _require_role(db, publisher, org.id, OrgRole.VIEWER)
     base = (
         select(MembershipRow, UserRow)
         .join(UserRow, UserRow.id == MembershipRow.user_id)

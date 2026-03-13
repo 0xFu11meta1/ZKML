@@ -114,6 +114,76 @@
       "fieldConfig": {
         "defaults": { "unit": "bytes" }
       }
+    },
+    {
+      "title": "Request Latency P99",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, rate(modelionn_http_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "P99"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(modelionn_http_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "P95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    },
+    {
+      "title": "Proof Job Queue Depth",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        {
+          "expr": "modelionn_proof_jobs_queued",
+          "legendFormat": "queued"
+        },
+        {
+          "expr": "modelionn_proof_jobs_proving",
+          "legendFormat": "proving"
+        },
+        {
+          "expr": "modelionn_proof_jobs_aggregating",
+          "legendFormat": "aggregating"
+        }
+      ]
+    },
+    {
+      "title": "Proof Aggregation Time",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "targets": [
+        {
+          "expr": "rate(modelionn_proof_aggregation_seconds_sum[5m]) / rate(modelionn_proof_aggregation_seconds_count[5m])",
+          "legendFormat": "avg aggregation"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    },
+    {
+      "title": "Celery Worker Queue Length",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "targets": [
+        {
+          "expr": "celery_active_count",
+          "legendFormat": "active tasks"
+        },
+        {
+          "expr": "celery_reserved_count",
+          "legendFormat": "reserved tasks"
+        }
+      ]
     }
   ],
   "schemaVersion": 39,

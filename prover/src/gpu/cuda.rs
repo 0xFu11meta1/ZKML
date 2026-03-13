@@ -242,3 +242,46 @@ pub fn cuda_ntt(
 
     Ok(())
 }
+
+/// Benchmark a CUDA device by running a small MSM and measuring throughput.
+/// Returns a score ≥ 0.0 where higher is better.
+#[cfg(feature = "cuda")]
+pub fn benchmark_device(device_index: u32) -> f64 {
+    use icicle_bn254::curve::{G1Projective, ScalarField};
+    use icicle_core::msm;
+    use std::time::Instant;
+
+    if icicle_cuda_runtime::device::set_device(device_index as i32).is_err() {
+        return 0.0;
+    }
+
+    // Small benchmark: MSM over 1024 random points
+    let n = 1024usize;
+    let scalars = vec![0u8; n * std::mem::size_of::<ScalarField>()];
+    let points = vec![0u8; n * std::mem::size_of::<G1Projective>()];
+
+    let scalars_typed: &[ScalarField] =
+        unsafe { std::slice::from_raw_parts(scalars.as_ptr() as *const ScalarField, n) };
+    let points_typed: &[G1Projective] =
+        unsafe { std::slice::from_raw_parts(points.as_ptr() as *const G1Projective, n) };
+
+    let cfg = msm::MSMConfig::default();
+    let mut msm_result = vec![G1Projective::default(); 1];
+
+    let start = Instant::now();
+    let iterations = 10;
+    let mut successes = 0;
+    for _ in 0..iterations {
+        if msm::msm(scalars_typed, points_typed, &cfg, &mut msm_result).is_ok() {
+            successes += 1;
+        }
+    }
+    let elapsed = start.elapsed().as_secs_f64();
+
+    if successes == 0 {
+        return 0.0;
+    }
+
+    // Score: operations per second  
+    (successes as f64) / elapsed
+}

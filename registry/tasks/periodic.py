@@ -26,12 +26,16 @@ async def _reset_counters_async() -> dict:
     from registry.core.deps import async_session
     from registry.models.database import APIKeyRow
 
-    async with async_session() as db:
-        result = await db.execute(
-            update(APIKeyRow).where(APIKeyRow.requests_today > 0).values(requests_today=0)
-        )
-        count = result.rowcount
-        await db.commit()
+    try:
+        async with async_session() as db:
+            result = await db.execute(
+                update(APIKeyRow).where(APIKeyRow.requests_today > 0).values(requests_today=0)
+            )
+            count = result.rowcount
+            await db.commit()
+    except Exception as exc:
+        logger.error("Failed to reset daily API key counters: %s", exc)
+        return {"reset": 0, "error": str(exc)[:200]}
 
     logger.info("Reset daily counters for %d API key(s)", count)
     return {"reset": count}

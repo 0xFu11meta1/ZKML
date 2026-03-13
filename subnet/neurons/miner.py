@@ -17,6 +17,7 @@ from typing import Any
 import bittensor as bt
 
 from subnet.base.neuron import BaseNeuron
+from subnet.base.checkpoint import Checkpoint
 from subnet.protocol.synapses import (
     CapabilityPingSynapse,
     ProofRequestSynapse,
@@ -54,6 +55,10 @@ class MinerNeuron(BaseNeuron):
         self._failed_proofs = 0
         self._current_load = 0.0
         self._benchmark_score: float = 0.0
+
+        # State persistence
+        self._checkpoint = Checkpoint("miner")
+        self._restore_state()
 
         # Attach handlers
         self.axon.attach(
@@ -270,6 +275,16 @@ class MinerNeuron(BaseNeuron):
             proof_bytes = await storage.download_bytes(synapse.proof_cid)
             if len(proof_bytes) > _MAX_IPFS_DOWNLOAD_BYTES:
                 raise ValueError(f"Proof data too large: {len(proof_bytes)} bytes")
+
+            # Verify content integrity if expected_hash was provided
+            if synapse.expected_hash:
+                actual_hash = hashlib.sha256(proof_bytes).hexdigest()
+                if actual_hash != synapse.expected_hash:
+                    synapse.valid = False
+                    synapse.error = "Proof data integrity check failed: hash mismatch"
+                    synapse.details = "Content hash does not match expected value"
+                    return synapse
+
             circuit_bytes = await storage.download_bytes(synapse.circuit_cid)
             if len(circuit_bytes) > _MAX_IPFS_DOWNLOAD_BYTES:
                 raise ValueError(f"Circuit data too large: {len(circuit_bytes)} bytes")
@@ -354,6 +369,33 @@ class MinerNeuron(BaseNeuron):
         except Exception as exc:
             logger.debug("Registry stats report failed (non-critical): %s", exc)
 
+    # ── State persistence ────────────────────────────────────
+
+    def _restore_state(self) -> None:
+        """Load last checkpoint if available."""
+        state = self._checkpoint.load()
+        if not state:
+            return
+        self._total_proofs = state.get("total_proofs", 0)
+        self._successful_proofs = state.get("successful_proofs", 0)
+        self._failed_proofs = state.get("failed_proofs", 0)
+        self._benchmark_score = state.get("benchmark_score", 0.0)
+        logger.info(
+            "Restored miner state: total=%d success=%d failed=%d",
+            self._total_proofs, self._successful_proofs, self._failed_proofs,
+        )
+
+    def _save_state(self, *, force: bool = False) -> None:
+        """Checkpoint current miner statistics."""
+        self._checkpoint.save({
+            "total_proofs": self._total_proofs,
+            "successful_proofs": self._successful_proofs,
+            "failed_proofs": self._failed_proofs,
+            "benchmark_score": self._benchmark_score,
+            "gpu_info": self._gpu_info,
+            "uptime_seconds": int(time.monotonic() - self._start_time),
+        }, force=force)
+
     # ── Lifecycle ────────────────────────────────────────────
 
     async def forward(self) -> None:
@@ -373,9 +415,11 @@ class MinerNeuron(BaseNeuron):
             while True:
                 self.sync()
                 self._report_stats_to_registry()
+                self._save_state()
                 time.sleep(60)
         except KeyboardInterrupt:
-            logger.info("Prover miner shutting down")
+            logger.info("Prover miner shutting down — saving state")
+            self._save_state(force=True)
         finally:
             self.axon.stop()
 

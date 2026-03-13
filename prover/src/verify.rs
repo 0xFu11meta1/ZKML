@@ -468,6 +468,7 @@ mod tests {
 
     fn test_proof(proof_system: ProofSystem) -> Proof {
         Proof {
+            version: PROOF_FORMAT_VERSION,
             proof_system,
             data: vec![1u8; 64],
             public_inputs: vec![0u8; 16],

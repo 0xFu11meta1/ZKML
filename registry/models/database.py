@@ -170,6 +170,7 @@ class APIKeyRow(Base):
     label: Mapped[str] = mapped_column(String(128), default="")
     requests_today: Mapped[int] = mapped_column(Integer, default=0)
     daily_limit: Mapped[int] = mapped_column(Integer, default=1000)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -200,7 +201,7 @@ class CircuitRow(Base):
     verification_key_cid: Mapped[str | None] = mapped_column(String(128), nullable=True)
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     publisher_hotkey: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
-    org_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    org_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True)
     downloads: Mapped[int] = mapped_column(Integer, default=0)
     proofs_generated: Mapped[int] = mapped_column(Integer, default=0)
     tags_csv: Mapped[str] = mapped_column(Text, default="")
@@ -216,6 +217,7 @@ class CircuitRow(Base):
         onupdate=lambda: datetime.now(timezone.utc),
         server_default=func.now(),
     )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         Index("ix_circuit_name_version", "name", "version", unique=True),
@@ -234,6 +236,7 @@ class ProofRow(Base):
     circuit_id: Mapped[int] = mapped_column(Integer, ForeignKey("circuits.id"), nullable=False, index=True)
     job_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("proof_jobs.id"), nullable=True, index=True)
     proof_type: Mapped[str] = mapped_column(Enum(ProofType), nullable=False)
+    format_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     proof_data_cid: Mapped[str] = mapped_column(String(128), nullable=False)
     public_inputs_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     proof_size_bytes: Mapped[int] = mapped_column(Integer, default=0)
@@ -249,6 +252,7 @@ class ProofRow(Base):
         default=lambda: datetime.now(timezone.utc),
         server_default=func.now(),
     )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     circuit: Mapped["CircuitRow"] = relationship("CircuitRow", lazy="selectin")
 

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useProofJob, useProofJobPartitions, useProofs } from "@/lib/api";
+import { useProofJobSSE } from "@/lib/realtime";
 import { timeAgo } from "@/lib/utils";
 import { ArrowLeft, Clock, Layers, Shield, Cpu } from "lucide-react";
 
@@ -32,6 +33,14 @@ export default function ProofDetailPage() {
   const { data: proofs } = useProofs(
     job ? { circuit_id: job.circuit_id, page: 1 } : undefined,
   );
+
+  // SSE: real-time updates while job is in progress
+  const isTerminal =
+    job?.status && ["completed", "failed", "timeout"].includes(job.status);
+  const { job: sseJob } = useProofJobSSE(!isTerminal ? taskId : undefined);
+
+  // Prefer SSE data when available (fresher) — fall back to polled data
+  const liveJob = sseJob ?? job;
 
   if (isLoading) {
     return (
@@ -62,8 +71,10 @@ export default function ProofDetailPage() {
   }
 
   const progress =
-    job.num_partitions > 0
-      ? Math.round((job.partitions_completed / job.num_partitions) * 100)
+    liveJob.num_partitions > 0
+      ? Math.round(
+          (liveJob.partitions_completed / liveJob.num_partitions) * 100,
+        )
       : 0;
 
   return (
@@ -80,17 +91,17 @@ export default function ProofDetailPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight font-mono">
-            {job.task_id}
+            {liveJob.task_id}
           </h1>
           <p className="mt-1 text-sm text-gray-500">
-            Created {timeAgo(job.created_at)}
+            Created {timeAgo(liveJob.created_at)}
           </p>
         </div>
         <Badge
-          variant={STATUS_VARIANTS[job.status] || "secondary"}
+          variant={STATUS_VARIANTS[liveJob.status] || "secondary"}
           className="text-sm"
         >
-          {job.status}
+          {liveJob.status}
         </Badge>
       </div>
 
@@ -99,19 +110,19 @@ export default function ProofDetailPage() {
         <StatCard
           icon={<Layers className="h-5 w-5 text-brand-600" />}
           title="Partitions"
-          value={`${job.partitions_completed} / ${job.num_partitions}`}
+          value={`${liveJob.partitions_completed} / ${liveJob.num_partitions}`}
         />
         <StatCard
           icon={<Shield className="h-5 w-5 text-purple-600" />}
           title="Redundancy"
-          value={`${job.redundancy}x`}
+          value={`${liveJob.redundancy}x`}
         />
         <StatCard
           icon={<Clock className="h-5 w-5 text-yellow-600" />}
           title="Actual Time"
           value={
-            job.actual_time_ms
-              ? `${(job.actual_time_ms / 1000).toFixed(1)}s`
+            liveJob.actual_time_ms
+              ? `${(liveJob.actual_time_ms / 1000).toFixed(1)}s`
               : "—"
           }
         />
@@ -120,10 +131,10 @@ export default function ProofDetailPage() {
           title="Circuit"
           value={
             <Link
-              href={`/circuits/${job.circuit_id}`}
+              href={`/circuits/${liveJob.circuit_id}`}
               className="text-brand-600 hover:underline"
             >
-              #{job.circuit_id}
+              #{liveJob.circuit_id}
             </Link>
           }
         />
@@ -148,22 +159,22 @@ export default function ProofDetailPage() {
             <div>
               <span className="font-medium text-gray-700">Witness CID:</span>
               <p className="font-mono text-xs mt-1 truncate">
-                {job.witness_cid}
+                {liveJob.witness_cid}
               </p>
             </div>
             <div>
               <span className="font-medium text-gray-700">Requester:</span>
               <p className="font-mono text-xs mt-1 truncate">
-                {job.requester_hotkey}
+                {liveJob.requester_hotkey}
               </p>
             </div>
-            {job.estimated_time_ms && (
+            {liveJob.estimated_time_ms && (
               <div>
                 <span className="font-medium text-gray-700">
                   Estimated Time:
                 </span>
                 <p className="font-mono text-xs mt-1">
-                  {(job.estimated_time_ms / 1000).toFixed(1)}s
+                  {(liveJob.estimated_time_ms / 1000).toFixed(1)}s
                 </p>
               </div>
             )}

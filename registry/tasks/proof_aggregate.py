@@ -22,7 +22,13 @@ from registry.tasks.celery_app import app
 logger = logging.getLogger(__name__)
 
 # Maximum wall-clock seconds a job may spend in PROVING before it is timed out.
-_MAX_PROVING_SECONDS = 1800  # 30 minutes
+# Configurable per proof system via settings.prover_timeout_s.
+def _get_max_proving_seconds() -> int:
+    try:
+        from registry.core.config import settings
+        return settings.prover_timeout_s
+    except Exception:
+        return 1800  # 30 minute fallback
 
 
 @app.task(
@@ -65,10 +71,11 @@ async def _aggregate_sweep(task) -> dict:
 
         for job in jobs:
             # Check for timeout
+            max_proving_seconds = _get_max_proving_seconds()
             elapsed = (datetime.now(timezone.utc) - (job.started_at or job.created_at)).total_seconds()
-            if elapsed > _MAX_PROVING_SECONDS:
+            if elapsed > max_proving_seconds:
                 job.status = ProofJobStatus.TIMEOUT
-                job.error = f"Proving timed out after {int(elapsed)}s"
+                job.error = f"Proving timed out after {int(elapsed)}s (limit: {max_proving_seconds}s)"
                 job.completed_at = datetime.now(timezone.utc)
                 timed_out += 1
                 continue
@@ -125,7 +132,7 @@ async def _aggregate_job(db, job) -> None:
         ProofJobStatus,
     )
 
-    # 1. AGGREGATING
+    # 1. AGGREGATING — lock partitions to prevent concurrent modification
     job.status = ProofJobStatus.AGGREGATING
     await db.flush()
 
@@ -137,6 +144,7 @@ async def _aggregate_job(db, job) -> None:
                 CircuitPartitionRow.status == "completed",
             )
             .order_by(CircuitPartitionRow.partition_index)
+            .with_for_update()
         )
     ).scalars().all()
 
@@ -201,8 +209,18 @@ async def _aggregate_job(db, job) -> None:
         engine = ProverEngine()
         verified = await engine.verify(circuit_data, proof_result)
     except ImportError:
-        logger.warning("Rust prover unavailable — skipping verification for job %d", job.id)
-        verified = True  # Allow completion without Rust engine in dev
+        from registry.core.config import settings as _settings
+        if not _settings.debug:
+            logger.error(
+                "Rust prover unavailable in production for job %d — marking verification as failed",
+                job.id,
+            )
+        else:
+            logger.warning(
+                "Rust prover unavailable in dev mode for job %d — proof will be marked unverified",
+                job.id,
+            )
+        verified = False
     except Exception as exc:
         logger.error("Verification failed for job %d: %s", job.id, exc)
         # Still complete the job; verified=False is recorded

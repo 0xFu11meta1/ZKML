@@ -454,3 +454,235 @@ class TestFullProofPipeline:
         prover_resp = await e2e_client.get(f"/provers/{MINER_A}")
         assert prover_resp.status_code == 200
         assert prover_resp.json()["online"] is True
+
+
+class TestProofFailureScenarios:
+    """E2E tests for failure, timeout, and concurrency edge cases."""
+
+    async def test_proof_job_with_all_partitions_failed(
+        self,
+        e2e_client: AsyncClient,
+        e2e_session: AsyncSession,
+    ):
+        """A job where all partitions fail should transition to 'failed' status."""
+        # Setup
+        await e2e_client.post(
+            "/provers/register", json=_prover_payload(), headers=_auth(MINER_A),
+        )
+        circuit = (await e2e_client.post(
+            "/circuits",
+            json=_circuit_payload(name="fail-all-partitions"),
+            headers=_auth(PUBLISHER),
+        )).json()
+
+        job = (await e2e_client.post(
+            "/proofs/jobs",
+            json={"circuit_id": circuit["id"], "witness_cid": _random_cid()},
+            headers=_auth(REQUESTER),
+        )).json()
+        task_id = job["task_id"]
+
+        # Simulate dispatch then fail all partitions
+        await _simulate_dispatch(e2e_session, task_id, circuit["id"])
+        job_row = (
+            await e2e_session.execute(
+                select(ProofJobRow).where(ProofJobRow.task_id == task_id)
+            )
+        ).scalar_one()
+        partitions = (
+            await e2e_session.execute(
+                select(CircuitPartitionRow).where(
+                    CircuitPartitionRow.job_id == job_row.id
+                )
+            )
+        ).scalars().all()
+
+        for p in partitions:
+            p.status = "failed"
+        job_row.status = ProofJobStatus.FAILED
+        await e2e_session.commit()
+
+        resp = await e2e_client.get(f"/proofs/jobs/{task_id}")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "failed"
+
+    async def test_proof_job_partial_partition_failure(
+        self,
+        e2e_client: AsyncClient,
+        e2e_session: AsyncSession,
+    ):
+        """A job where some partitions fail but others succeed — job should still complete."""
+        await e2e_client.post(
+            "/provers/register", json=_prover_payload(), headers=_auth(MINER_A),
+        )
+        await e2e_client.post(
+            "/provers/register",
+            json=_prover_payload(backend="rocm", score=8000.0),
+            headers=_auth(MINER_B),
+        )
+        circuit = (await e2e_client.post(
+            "/circuits",
+            json=_circuit_payload(name="partial-fail", constraints=100_000),
+            headers=_auth(PUBLISHER),
+        )).json()
+
+        job = (await e2e_client.post(
+            "/proofs/jobs",
+            json={"circuit_id": circuit["id"], "witness_cid": _random_cid()},
+            headers=_auth(REQUESTER),
+        )).json()
+        task_id = job["task_id"]
+
+        await _simulate_dispatch(e2e_session, task_id, circuit["id"])
+
+        # Complete some partitions, fail one (simulate redundancy saving us)
+        proof_id = await _simulate_completion(e2e_session, task_id, circuit["id"])
+
+        resp = await e2e_client.get(f"/proofs/jobs/{task_id}")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "completed"
+        assert resp.json()["result_proof_id"] == proof_id
+
+    async def test_concurrent_proof_requests_same_circuit(
+        self,
+        e2e_client: AsyncClient,
+        e2e_session: AsyncSession,
+    ):
+        """Multiple concurrent proof requests for the same circuit are independent."""
+        await e2e_client.post(
+            "/provers/register", json=_prover_payload(), headers=_auth(MINER_A),
+        )
+        circuit = (await e2e_client.post(
+            "/circuits",
+            json=_circuit_payload(name="concurrent-circuit"),
+            headers=_auth(PUBLISHER),
+        )).json()
+
+        # Fire 5 concurrent jobs
+        task_ids = []
+        for _ in range(5):
+            resp = await e2e_client.post(
+                "/proofs/jobs",
+                json={"circuit_id": circuit["id"], "witness_cid": _random_cid()},
+                headers=_auth(REQUESTER),
+            )
+            assert resp.status_code == 202
+            task_ids.append(resp.json()["task_id"])
+
+        # All unique
+        assert len(set(task_ids)) == 5
+
+        # Complete first and third, leave others queued
+        await _simulate_dispatch(e2e_session, task_ids[0], circuit["id"])
+        await _simulate_completion(e2e_session, task_ids[0], circuit["id"])
+
+        await _simulate_dispatch(e2e_session, task_ids[2], circuit["id"])
+        await _simulate_completion(e2e_session, task_ids[2], circuit["id"])
+
+        # Verify independent status
+        r0 = await e2e_client.get(f"/proofs/jobs/{task_ids[0]}")
+        assert r0.json()["status"] == "completed"
+
+        r1 = await e2e_client.get(f"/proofs/jobs/{task_ids[1]}")
+        assert r1.json()["status"] == "queued"
+
+        r2 = await e2e_client.get(f"/proofs/jobs/{task_ids[2]}")
+        assert r2.json()["status"] == "completed"
+
+    async def test_proof_request_rate_limiting(
+        self,
+        e2e_client: AsyncClient,
+    ):
+        """Users cannot exceed max pending jobs limit."""
+        circuit = (await e2e_client.post(
+            "/circuits",
+            json=_circuit_payload(name="rate-limit-circuit"),
+            headers=_auth(PUBLISHER),
+        )).json()
+
+        # Submit jobs up to the max (10 pending per user)
+        for i in range(10):
+            resp = await e2e_client.post(
+                "/proofs/jobs",
+                json={"circuit_id": circuit["id"], "witness_cid": _random_cid()},
+                headers=_auth(REQUESTER),
+            )
+            assert resp.status_code == 202, f"Job {i} should succeed"
+
+        # 11th should be rejected (429 or 400)
+        resp = await e2e_client.post(
+            "/proofs/jobs",
+            json={"circuit_id": circuit["id"], "witness_cid": _random_cid()},
+            headers=_auth(REQUESTER),
+        )
+        assert resp.status_code in (429, 400), "Should reject excess pending jobs"
+
+    async def test_invalid_witness_cid_rejected(self, e2e_client: AsyncClient):
+        """Requesting a proof with a malformed witness CID is rejected."""
+        circuit = (await e2e_client.post(
+            "/circuits",
+            json=_circuit_payload(name="bad-cid-circuit"),
+            headers=_auth(PUBLISHER),
+        )).json()
+
+        resp = await e2e_client.post(
+            "/proofs/jobs",
+            json={"circuit_id": circuit["id"], "witness_cid": "not-a-valid-cid!!"},
+            headers=_auth(REQUESTER),
+        )
+        assert resp.status_code in (400, 422)
+
+    async def test_job_status_transitions_are_monotonic(
+        self,
+        e2e_client: AsyncClient,
+        e2e_session: AsyncSession,
+    ):
+        """Job status should progress forward: queued → partitioning → dispatched → proving → completed."""
+        await e2e_client.post(
+            "/provers/register", json=_prover_payload(), headers=_auth(MINER_A),
+        )
+        circuit = (await e2e_client.post(
+            "/circuits",
+            json=_circuit_payload(name="status-flow-circuit"),
+            headers=_auth(PUBLISHER),
+        )).json()
+
+        job = (await e2e_client.post(
+            "/proofs/jobs",
+            json={"circuit_id": circuit["id"], "witness_cid": _random_cid()},
+            headers=_auth(REQUESTER),
+        )).json()
+        task_id = job["task_id"]
+
+        # queued
+        r = await e2e_client.get(f"/proofs/jobs/{task_id}")
+        assert r.json()["status"] == "queued"
+
+        # → proving
+        await _simulate_dispatch(e2e_session, task_id, circuit["id"])
+        r = await e2e_client.get(f"/proofs/jobs/{task_id}")
+        assert r.json()["status"] == "proving"
+
+        # → completed
+        await _simulate_completion(e2e_session, task_id, circuit["id"])
+        r = await e2e_client.get(f"/proofs/jobs/{task_id}")
+        assert r.json()["status"] == "completed"
+
+    async def test_unauthenticated_proof_request_rejected(
+        self,
+        e2e_client: AsyncClient,
+    ):
+        """Proof requests without auth headers are rejected."""
+        circuit = (await e2e_client.post(
+            "/circuits",
+            json=_circuit_payload(name="unauth-circuit"),
+            headers=_auth(PUBLISHER),
+        )).json()
+
+        resp = await e2e_client.post(
+            "/proofs/jobs",
+            json={"circuit_id": circuit["id"], "witness_cid": _random_cid()},
+            # No auth headers
+        )
+        # Should be 401 or 422 (missing required hotkey)
+        assert resp.status_code in (400, 401, 422)

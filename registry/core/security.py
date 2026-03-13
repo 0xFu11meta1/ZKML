@@ -56,7 +56,10 @@ def _check_and_record_nonce(nonce: str, now: float) -> bool:
                 return True
             return False
         except Exception:
-            pass  # fall through to in-memory
+            logger.warning(
+                "Redis nonce check failed, falling back to in-memory. "
+                "This is NOT safe in multi-worker deployments."
+            )
 
     with _nonce_lock:
         expired = [n for n, ts in _used_nonces.items() if now - ts > _MAX_AGE]
@@ -110,14 +113,22 @@ async def verify_publisher(
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Bad signature")
     except ImportError:
         from registry.core.config import settings as _cfg
+        if not _cfg.debug:
+            # Fail-closed in non-debug mode: never allow unsigned requests
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED,
+                "Signature verification unavailable (bittensor not installed). "
+                "This is required in production mode.",
+            )
         if _cfg.require_signature_verification:
             raise HTTPException(
                 status.HTTP_401_UNAUTHORIZED,
                 "Signature verification required but bittensor is not installed",
             )
-        logger.critical(
-            "UNAUTHENTICATED MODE: bittensor not installed — signature verification "
-            "disabled. Do NOT use this in production! Set require_signature_verification=True."
+        logger.warning(
+            "DEV MODE: bittensor not installed — signature verification disabled for hotkey %s. "
+            "Set MODELIONN_DEBUG=false in production.",
+            x_hotkey,
         )
     except Exception as exc:
         logger.error("Signature verification failed for hotkey %s: %s", x_hotkey, exc)

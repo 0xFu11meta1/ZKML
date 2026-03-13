@@ -52,11 +52,19 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 status_code=403,
             )
 
-        origin_host = urlparse(origin).netloc.split(":")[0]
-        # Derive expected host from Host header
+        # Compare full netloc (host + port) to prevent cross-port CSRF
+        origin_parsed = urlparse(origin)
+        origin_netloc = origin_parsed.netloc
         host_header = request.headers.get("host", "")
-        expected_host = host_header.split(":")[0]
-        if origin_host and expected_host and origin_host != expected_host:
+        # Normalize: add default port if missing for comparison
+        origin_host_only = origin_parsed.hostname or ""
+        expected_host_only = host_header.split(":")[0]
+        origin_port = origin_parsed.port
+        host_port = int(host_header.split(":")[1]) if ":" in host_header else None
+        # Both host and port must match (when ports are specified)
+        host_mismatch = origin_host_only != expected_host_only
+        port_mismatch = origin_port is not None and host_port is not None and origin_port != host_port
+        if origin_host_only and expected_host_only and (host_mismatch or port_mismatch):
             logger.warning(
                 "CSRF blocked: origin=%s host=%s path=%s",
                 origin, host_header, request.url.path,

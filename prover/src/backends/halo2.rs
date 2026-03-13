@@ -50,6 +50,7 @@ impl ProverBackend for Halo2Backend {
             info!("Halo2: proof generated in {}ms ({} bytes)", elapsed, proof_size);
 
             return Ok(Proof {
+                version: PROOF_FORMAT_VERSION,
                 proof_system: ProofSystem::Halo2,
                 data: proof_bytes,
                 public_inputs: witness.public_inputs.clone(),

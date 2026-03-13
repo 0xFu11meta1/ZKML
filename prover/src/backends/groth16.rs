@@ -13,6 +13,9 @@ use crate::types::*;
 use crate::{ProverError, ProverResult};
 use super::ProverBackend;
 
+#[cfg(feature = "cuda")]
+use log::warn;
+
 pub struct Groth16Backend {
     gpu_manager: Arc<GpuManager>,
 }
@@ -35,6 +38,19 @@ impl ProverBackend for Groth16Backend {
         // Select best available GPU for MSM acceleration
         let gpu_backend = self.gpu_manager.best_device()
             .map(|d| d.backend);
+
+        // If a CUDA GPU is available, configure ICICLE as the MSM backend
+        // so that Arkworks Groth16::prove uses GPU-accelerated MSM internally
+        #[cfg(feature = "cuda")]
+        if let Some(device) = self.gpu_manager.best_device() {
+            if device.backend == GpuBackendType::Cuda {
+                if let Err(e) = icicle_cuda_runtime::device::set_device(device.device_index as i32) {
+                    log::warn!("Failed to set CUDA device {}: {:?}, falling back to CPU", device.device_index, e);
+                } else {
+                    info!("Groth16: using CUDA device {} for MSM acceleration", device.device_index);
+                }
+            }
+        }
 
         #[cfg(feature = "groth16")]
         {
@@ -81,6 +97,7 @@ impl ProverBackend for Groth16Backend {
             info!("Groth16: proof generated in {}ms ({} bytes)", elapsed, proof_size);
 
             return Ok(Proof {
+                version: PROOF_FORMAT_VERSION,
                 proof_system: ProofSystem::Groth16,
                 data: proof_bytes,
                 public_inputs: witness.public_inputs.clone(),

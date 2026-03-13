@@ -47,7 +47,11 @@ def _get_redis():
         logger.info("Rate limiter: using Redis at %s", settings.redis_url)
     except Exception:
         _redis_client = None
-        logger.info("Rate limiter: Redis unavailable, using in-memory fallback")
+        logger.warning(
+            "Rate limiter: Redis unavailable, using in-memory fallback. "
+            "WARNING: In-memory rate limiting is NOT cluster-safe — each worker "
+            "tracks limits independently. Use Redis in production."
+        )
     return _redis_client
 
 

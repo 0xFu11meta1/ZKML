@@ -16,7 +16,7 @@ from registry.tasks.celery_app import app
 logger = logging.getLogger(__name__)
 
 
-@app.task(bind=True, name="registry.tasks.proof_dispatch.dispatch_proof_job", max_retries=2)
+@app.task(bind=True, name="registry.tasks.proof_dispatch.dispatch_proof_job", max_retries=2, soft_time_limit=300, time_limit=360)
 def dispatch_proof_job(self, job_id: int) -> dict:
     """Main proof dispatch task — partitions circuit and routes to provers.
 
@@ -27,8 +27,33 @@ def dispatch_proof_job(self, job_id: int) -> dict:
     loop = asyncio.new_event_loop()
     try:
         return loop.run_until_complete(_dispatch_async(self, job_id))
+    except Exception as exc:
+        # Handle soft time limit exceeded — mark job as failed
+        loop2 = asyncio.new_event_loop()
+        try:
+            loop2.run_until_complete(_timeout_job(job_id, str(exc)))
+        finally:
+            loop2.close()
+        raise
     finally:
         loop.close()
+
+
+async def _timeout_job(job_id: int, error: str) -> None:
+    """Mark a job as timed out when dispatch exceeds time limit."""
+    from sqlalchemy import select
+    from registry.core.deps import async_session
+    from registry.models.database import ProofJobRow, ProofJobStatus
+
+    async with async_session() as db:
+        job = (await db.execute(
+            select(ProofJobRow).where(ProofJobRow.id == job_id)
+        )).scalar_one_or_none()
+        if job and job.status not in (ProofJobStatus.COMPLETED, ProofJobStatus.FAILED, ProofJobStatus.TIMEOUT):
+            job.status = ProofJobStatus.FAILED
+            job.error = f"Dispatch timed out: {error[:500]}"
+            job.completed_at = datetime.now(timezone.utc)
+            await db.commit()
 
 
 async def _dispatch_async(task, job_id: int) -> dict:

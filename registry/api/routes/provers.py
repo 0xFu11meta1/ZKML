@@ -21,17 +21,25 @@ router = APIRouter()
 
 # ── Request / Response Models ────────────────────────────────
 
+# Upper bounds for prover capability claims (prevent spoofing)
+_MAX_VRAM_BYTES = 2 * 1024**4          # 2 TB (well beyond any current GPU)
+_MAX_COMPUTE_UNITS = 1_000_000         # Reasonable ceiling
+_MAX_BENCHMARK_SCORE = 100_000.0       # Normalized score ceiling
+_MAX_CONSTRAINTS = 10_000_000_000      # 10B constraints
+_VALID_PROOF_TYPES = frozenset({"groth16", "plonk", "halo2", "stark"})
+
+
 class ProverRegisterRequest(BaseModel):
     gpu_name: str = Field("", max_length=256)
     gpu_backend: str = Field("cpu", description="cuda|rocm|metal|webgpu|cpu")
     gpu_count: int = Field(1, ge=1, le=64)
-    vram_total_bytes: int = Field(0, ge=0)
-    vram_available_bytes: int = Field(0, ge=0)
-    compute_units: int = Field(0, ge=0)
+    vram_total_bytes: int = Field(0, ge=0, le=_MAX_VRAM_BYTES)
+    vram_available_bytes: int = Field(0, ge=0, le=_MAX_VRAM_BYTES)
+    compute_units: int = Field(0, ge=0, le=_MAX_COMPUTE_UNITS)
     compute_version: str = Field("", max_length=32)
-    benchmark_score: float = Field(0.0, ge=0.0)
+    benchmark_score: float = Field(0.0, ge=0.0, le=_MAX_BENCHMARK_SCORE)
     supported_proof_types: list[str] = Field(default_factory=lambda: ["groth16", "plonk", "halo2", "stark"])
-    max_constraints: int = Field(0, ge=0)
+    max_constraints: int = Field(0, ge=0, le=_MAX_CONSTRAINTS)
 
 
 class ProverResponse(BaseModel):
@@ -112,6 +120,15 @@ async def register_prover(
         gpu_backend = GpuBackendEnum(body.gpu_backend)
     except ValueError:
         raise HTTPException(400, f"Invalid gpu_backend: {body.gpu_backend}")
+
+    # Validate proof type claims
+    invalid_types = set(body.supported_proof_types) - _VALID_PROOF_TYPES
+    if invalid_types:
+        raise HTTPException(400, f"Invalid proof types: {', '.join(sorted(invalid_types))}")
+
+    # vram_available cannot exceed vram_total
+    if body.vram_available_bytes > body.vram_total_bytes:
+        raise HTTPException(400, "vram_available_bytes cannot exceed vram_total_bytes")
 
     # Upsert: update if exists, create if not
     existing = (await db.execute(

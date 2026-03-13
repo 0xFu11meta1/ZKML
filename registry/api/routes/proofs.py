@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -166,6 +167,13 @@ async def request_proof(
     if not circuit:
         raise HTTPException(404, "Circuit not found")
 
+    # Ensure the circuit has a verification key (needed for proof verification)
+    if not circuit.verification_key_cid:
+        raise HTTPException(
+            400,
+            "Circuit is missing a verification key CID — cannot generate verifiable proofs",
+        )
+
     # Validate witness CID format
     if not _CID_RE.match(body.witness_cid):
         raise HTTPException(400, f"Invalid witness CID format: {body.witness_cid[:40]}")
@@ -231,6 +239,7 @@ async def get_proof_job(
 async def get_job_partitions(
     task_id: str,
     db: AsyncSession = Depends(get_db),
+    _caller: str = Depends(verify_publisher),
 ) -> list[dict]:
     """Get partition-level status for a proof job."""
     job = (await db.execute(
@@ -291,14 +300,15 @@ async def list_proof_jobs(
 @router.get("", response_model=ProofList)
 async def list_proofs(
     db: AsyncSession = Depends(get_db),
+    _caller: str = Depends(verify_publisher),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     circuit_id: int | None = None,
     verified: bool | None = None,
 ) -> dict:
     """List generated proofs."""
-    query = select(ProofRow)
-    count_query = select(func.count()).select_from(ProofRow)
+    query = select(ProofRow).where(ProofRow.deleted_at.is_(None))
+    count_query = select(func.count()).select_from(ProofRow).where(ProofRow.deleted_at.is_(None))
 
     if circuit_id:
         query = query.where(ProofRow.circuit_id == circuit_id)
@@ -421,3 +431,62 @@ async def verify_proof(
         "proof_system": proof_type_val,
         "details": details,
     }
+
+
+# ── SSE: Real-time proof job status stream ───────────────────
+
+_TERMINAL_STATUSES = frozenset({"completed", "failed", "timeout"})
+
+
+@router.get("/jobs/{task_id}/stream")
+async def stream_proof_job(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    """Server-Sent Events stream for real-time proof job status updates.
+
+    Sends a JSON event every 2 seconds with the current job state.
+    The stream closes automatically when the job reaches a terminal status
+    (completed, failed, timeout) or after 5 minutes.
+    """
+    import asyncio
+
+    # Verify job exists before starting the stream
+    row = (await db.execute(
+        select(ProofJobRow).where(ProofJobRow.task_id == task_id)
+    )).scalar_one_or_none()
+    if not row:
+        raise HTTPException(404, "Proof job not found")
+
+    async def _event_generator():
+        max_iterations = 150  # 2s × 150 = 5 min timeout
+        for _ in range(max_iterations):
+            row = (await db.execute(
+                select(ProofJobRow).where(ProofJobRow.task_id == task_id)
+            )).scalar_one_or_none()
+            if not row:
+                yield f"event: error\ndata: {json.dumps({'error': 'Job not found'})}\n\n"
+                return
+
+            payload = _job_to_response(row)
+            yield f"data: {json.dumps(payload)}\n\n"
+
+            status_val = row.status if isinstance(row.status, str) else row.status.value
+            if status_val in _TERMINAL_STATUSES:
+                yield f"event: done\ndata: {json.dumps(payload)}\n\n"
+                return
+
+            await asyncio.sleep(2)
+
+        # Stream timed out
+        yield f"event: timeout\ndata: {json.dumps({'error': 'Stream timeout'})}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

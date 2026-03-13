@@ -40,7 +40,10 @@ async def _get_redis():  # type: ignore[no-untyped-def]
         logger.info("Redis connected: %s", settings.redis_url)
         return _client
     except Exception:
-        logger.warning("Redis unavailable — cache operating in passthrough mode")
+        logger.warning(
+            "Redis unavailable — cache operating in passthrough mode. "
+            "All cache operations will be no-ops. This may degrade performance."
+        )
         _fallback_mode = True
         return None
 
