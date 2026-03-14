@@ -28,6 +28,7 @@ from subnet.protocol.synapses import (
 )
 from subnet.consensus.engine import ConsensusEngine, VerificationVote
 from subnet.reward.scoring import ProverScore, ProverRewardWeights, compute_prover_rewards
+from subnet.reward.anti_sybil import ProofHashDeduplicator
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,9 @@ class ValidatorNeuron(BaseNeuron):
 
         # Consensus engine for multi-validator proof verification
         self._consensus = ConsensusEngine()
+
+        # Proof hash deduplication to prevent fragment reuse across jobs
+        self._deduplicator = ProofHashDeduplicator()
 
         # Commit-reveal store for anti-frontrunning
         # Maps commit_hash → {hotkey, artifact_name, timestamp}
@@ -476,6 +480,15 @@ class ValidatorNeuron(BaseNeuron):
             if isinstance(fragment_data, str):
                 fragment_data = fragment_data.encode()
             fragment_hash = hashlib.sha256(fragment_data).hexdigest()
+
+            # Check for duplicate proof fragment reuse across jobs/partitions
+            if not self._deduplicator.check_and_record(fragment_hash, job_id, pidx):
+                logger.warning(
+                    "Job %s partition %d: duplicate proof fragment detected (hash=%s)",
+                    job_id, pidx, fragment_hash[:16],
+                )
+                continue
+
             proof_cid = result.get("commitment") or fragment_hash
 
             # Select verifiers via consensus engine (excluding the generator)
