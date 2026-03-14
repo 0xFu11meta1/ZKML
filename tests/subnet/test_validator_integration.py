@@ -156,6 +156,56 @@ class TestCommitReveal:
         result = validator.handle_reveal("hotkey-0", name, artifact_hash, nonce)
         assert result["accepted"] is False
 
+    @pytest.mark.asyncio
+    async def test_commit_reveal_synapse_commit_phase(self, validator):
+        synapse = MagicMock()
+        synapse.phase = "commit"
+        synapse.artifact_name = "artifact"
+        synapse.commit_hash = "deadbeef"
+        synapse.artifact_hash = ""
+        synapse.nonce = ""
+        synapse.dendrite = MagicMock(hotkey="hotkey-0")
+
+        out = await validator.handle_commit_reveal(synapse)
+        assert out.accepted is True
+        assert out.is_earliest is True
+        assert out.error == ""
+
+    @pytest.mark.asyncio
+    async def test_commit_reveal_synapse_reveal_phase(self, validator):
+        name = "artifact"
+        artifact_hash = "hash-1"
+        nonce = "nonce-1"
+        commit_hash = hashlib.sha256(f"{name}{artifact_hash}{nonce}".encode()).hexdigest()
+        validator.handle_commit("hotkey-0", name, commit_hash)
+
+        synapse = MagicMock()
+        synapse.phase = "reveal"
+        synapse.artifact_name = name
+        synapse.commit_hash = ""
+        synapse.artifact_hash = artifact_hash
+        synapse.nonce = nonce
+        synapse.dendrite = MagicMock(hotkey="hotkey-0")
+
+        out = await validator.handle_commit_reveal(synapse)
+        assert out.accepted is True
+        assert out.error == ""
+
+    @pytest.mark.asyncio
+    async def test_blacklist_commit_reveal_requires_registered_hotkey(self, validator):
+        synapse = MagicMock()
+        synapse.dendrite = MagicMock(hotkey="not-registered")
+        blocked, reason = await validator.blacklist_commit_reveal(synapse)
+        assert blocked is True
+        assert "Not registered" in reason
+
+    @pytest.mark.asyncio
+    async def test_priority_returns_stake_for_registered_hotkey(self, validator):
+        synapse = MagicMock()
+        synapse.dendrite = MagicMock(hotkey="hotkey-3")
+        score = await validator.priority(synapse)
+        assert score == pytest.approx(100.0)
+
 
 # ── Consensus-Integrated Verification Tests ─────────────────
 

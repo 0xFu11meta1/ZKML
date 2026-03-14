@@ -23,6 +23,7 @@ from subnet.base.neuron import BaseNeuron
 from subnet.base.checkpoint import Checkpoint
 from subnet.protocol.synapses import (
     CapabilityPingSynapse,
+    CommitRevealSynapse,
     ProofRequestSynapse,
     ProofVerifySynapse,
 )
@@ -56,6 +57,7 @@ class ValidatorNeuron(BaseNeuron):
     def __init__(self, config: bt.config | None = None) -> None:
         super().__init__(config)
         self.dendrite = bt.dendrite(wallet=self.wallet)
+        self.axon = bt.axon(wallet=self.wallet, config=self.config)
 
         n = self.metagraph.n.item() if hasattr(self.metagraph.n, "item") else int(self.metagraph.n)
         self.scores = np.zeros(n, dtype=np.float32)
@@ -149,13 +151,14 @@ class ValidatorNeuron(BaseNeuron):
             "step": self._step,
         }, force=force)
 
+        # Expose commit-reveal over axon for anti-frontrunning protocol.
+        self.axon.attach(
+            forward_fn=self.handle_commit_reveal,
+            blacklist_fn=self.blacklist_commit_reveal,
+            priority_fn=self.priority,
+        )
+
     # ── Commit-reveal anti-frontrunning ──────────────────────
-    # TODO: Wire CommitRevealSynapse handlers to an axon endpoint.
-    # Currently the protocol layer (CommitRevealSynapse) is defined but
-    # the validator only uses a dendrite (outbound). To enable anti-frontrunning,
-    # the validator would need to serve an axon with handle_commit/handle_reveal
-    # attached. For now, the store is used internally and handlers are kept
-    # minimal. Full implementation deferred to subnet v2.
 
     def handle_commit(self, hotkey: str, artifact_name: str, commit_hash: str) -> dict:
         """Record a commitment hash for later reveal (internal use)."""
@@ -213,6 +216,39 @@ class ValidatorNeuron(BaseNeuron):
 
         logger.info("Reveal accepted: %s from %s (earliest=%s)", artifact_hash[:16], hotkey[:12], is_earliest)
         return {"accepted": True, "is_earliest": is_earliest, "error": ""}
+
+    async def handle_commit_reveal(self, synapse: CommitRevealSynapse) -> CommitRevealSynapse:
+        """Axon handler for two-phase commit-reveal requests."""
+        caller = getattr(getattr(synapse, "dendrite", None), "hotkey", "")
+        if synapse.phase == "commit":
+            result = self.handle_commit(caller, synapse.artifact_name, synapse.commit_hash)
+        elif synapse.phase == "reveal":
+            result = self.handle_reveal(
+                caller,
+                synapse.artifact_name,
+                synapse.artifact_hash,
+                synapse.nonce,
+            )
+        else:
+            result = {"accepted": False, "is_earliest": False, "error": "Invalid phase"}
+
+        synapse.accepted = result["accepted"]
+        synapse.is_earliest = result["is_earliest"]
+        synapse.error = result["error"]
+        return synapse
+
+    async def blacklist_commit_reveal(self, synapse: CommitRevealSynapse) -> tuple[bool, str]:
+        caller = getattr(getattr(synapse, "dendrite", None), "hotkey", "")
+        if caller not in self.metagraph.hotkeys:
+            return True, "Not registered"
+        return False, ""
+
+    async def priority(self, synapse: bt.Synapse) -> float:
+        caller = getattr(getattr(synapse, "dendrite", None), "hotkey", "")
+        if caller in self.metagraph.hotkeys:
+            uid = self.metagraph.hotkeys.index(caller)
+            return float(self.metagraph.S[uid])
+        return 0.0
 
     # ── Main loop ────────────────────────────────────────────
 
@@ -689,6 +725,8 @@ class ValidatorNeuron(BaseNeuron):
 
     def run(self) -> None:
         logger.info("Validator starting — proof dispatcher mode")
+        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
+        self.axon.start()
         loop = asyncio.get_event_loop()
         step = 0
         try:
@@ -703,6 +741,8 @@ class ValidatorNeuron(BaseNeuron):
         except KeyboardInterrupt:
             logger.info("Validator shutting down — saving state")
             self._save_state(force=True)
+        finally:
+            self.axon.stop()
 
 
 def main() -> None:
