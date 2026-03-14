@@ -34,7 +34,7 @@ class ProofRequestSynapse(bt.Synapse):
     proving_key_cid: str = ""               # IPFS CID of the proving key
     proof_system: str = "groth16"           # groth16 | plonk | halo2 | stark
     circuit_type: str = "general"           # general | evm | zkml | custom
-    timeout_s: int = 600
+    timeout_s: int = 600                    # Max proving time; respected by miner
 
     # Response fields (miner → validator)
     proof_fragment: bytes = b""             # Serialized proof fragment
@@ -75,7 +75,7 @@ class CapabilityPingSynapse(bt.Synapse):
     vram_total_bytes: int = 0
     vram_available_bytes: int = 0
     compute_units: int = 0
-    compute_version: str = ""
+    compute_version: str = ""               # GPU compute capability (e.g. "8.6" for CUDA)
     benchmark_score: float = 0.0            # Proofs/second on standard test circuit
     supported_proof_types: str = ""         # Comma-separated: groth16,plonk,halo2,stark
     max_constraints: int = 0

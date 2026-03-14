@@ -91,6 +91,7 @@ class MinerNeuron(BaseNeuron):
                     "vram_available_bytes": sum(d.vram_available for d in devices),
                     "compute_units": best.compute_units,
                     "benchmark_score": best.benchmark_score,
+                    "compute_version": getattr(best, "compute_version", ""),
                 }
                 logger.info("GPU prover initialized: %s (%d devices)", best.name, len(devices))
             else:
@@ -241,6 +242,7 @@ class MinerNeuron(BaseNeuron):
         synapse.vram_available_bytes = self._gpu_info.get("vram_available_bytes", 0)
         synapse.compute_units = self._gpu_info.get("compute_units", 0)
         synapse.benchmark_score = self._benchmark_score or self._gpu_info.get("benchmark_score", 0.0)
+        synapse.compute_version = self._gpu_info.get("compute_version", "")
         synapse.supported_proof_types = "groth16,plonk,halo2,stark"
         synapse.max_constraints = 100_000_000  # 100M default
         synapse.current_load = self._current_load
