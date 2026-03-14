@@ -122,6 +122,37 @@ services:
       timeout: 5s
       retries: 3
 
+  backup:
+    image: docker:24-cli
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./scripts/backup.sh:/scripts/backup.sh:ro
+      - backup_data:/backups
+    environment:
+      COMPOSE_FILE: /docker-compose.prod.yml
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Backup cron starting — daily at 02:00 UTC"
+        while true; do
+          # Sleep until next 02:00 UTC
+          now=$$(date +%s)
+          target=$$(date -d "tomorrow 02:00" +%s 2>/dev/null || date -v+1d -v2H -v0M -v0S +%s)
+          sleep_s=$$((target - now))
+          [ "$$sleep_s" -le 0 ] && sleep_s=86400
+          echo "Next backup in $$sleep_s seconds"
+          sleep "$$sleep_s"
+          echo "==> Running scheduled backup $$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          /bin/sh /scripts/backup.sh /backups || echo "Backup failed with exit code $$?"
+        done
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+
   grafana:
     restart: unless-stopped
     environment:
@@ -138,3 +169,4 @@ services:
 
 volumes:
   pg_data:
+  backup_data:
