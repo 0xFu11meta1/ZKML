@@ -34,6 +34,10 @@ def _get_max_proving_seconds() -> int:
         return 1800  # 30 minute fallback
 
 
+# Module-level constant for backward compat / tests
+_MAX_PROVING_SECONDS: int = _get_max_proving_seconds()
+
+
 @app.task(
     bind=True,
     name="registry.tasks.proof_aggregate.aggregate_completed_jobs",

@@ -109,7 +109,7 @@ class TestMembership:
 
     async def test_list_members(self, client: AsyncClient):
         await self._setup_org(client)
-        resp = await client.get("/orgs/test-org/members")
+        resp = await client.get("/orgs/test-org/members", headers=_auth())
         assert resp.status_code == 200
         data = resp.json()
         assert data["total"] >= 1
