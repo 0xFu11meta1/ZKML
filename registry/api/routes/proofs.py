@@ -274,22 +274,16 @@ async def list_proof_jobs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status: str | None = None,
-    requester: str | None = None,
 ) -> dict:
-    """List proof jobs with filters (scoped to caller's own jobs)."""
-    # Scope: callers can only see their own jobs unless filtering for others explicitly
-    effective_requester = requester or caller
-    query = select(ProofJobRow).where(ProofJobRow.requester_hotkey == effective_requester)
+    """List proof jobs scoped to caller's own jobs."""
+    query = select(ProofJobRow).where(ProofJobRow.requester_hotkey == caller)
     count_query = select(func.count()).select_from(ProofJobRow).where(
-        ProofJobRow.requester_hotkey == effective_requester
+        ProofJobRow.requester_hotkey == caller
     )
 
     if status:
         query = query.where(ProofJobRow.status == status)
         count_query = count_query.where(ProofJobRow.status == status)
-    if requester:
-        query = query.where(ProofJobRow.requester_hotkey == requester)
-        count_query = count_query.where(ProofJobRow.requester_hotkey == requester)
 
     total = (await db.execute(count_query)).scalar() or 0
     query = query.order_by(ProofJobRow.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
@@ -306,15 +300,27 @@ async def list_proof_jobs(
 @router.get("", response_model=ProofList)
 async def list_proofs(
     db: AsyncSession = Depends(get_db),
-    _caller: str = Depends(verify_publisher),
+    caller: str = Depends(verify_publisher),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     circuit_id: int | None = None,
     verified: bool | None = None,
 ) -> dict:
-    """List generated proofs."""
-    query = select(ProofRow).where(ProofRow.deleted_at.is_(None))
-    count_query = select(func.count()).select_from(ProofRow).where(ProofRow.deleted_at.is_(None))
+    """List generated proofs scoped to caller's jobs."""
+    # Only return proofs from jobs the caller requested
+    query = (
+        select(ProofRow)
+        .join(ProofJobRow, ProofRow.id == ProofJobRow.result_proof_id)
+        .where(ProofJobRow.requester_hotkey == caller)
+        .where(ProofRow.deleted_at.is_(None))
+    )
+    count_query = (
+        select(func.count())
+        .select_from(ProofRow)
+        .join(ProofJobRow, ProofRow.id == ProofJobRow.result_proof_id)
+        .where(ProofJobRow.requester_hotkey == caller)
+        .where(ProofRow.deleted_at.is_(None))
+    )
 
     if circuit_id:
         query = query.where(ProofRow.circuit_id == circuit_id)

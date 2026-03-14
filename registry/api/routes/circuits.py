@@ -152,9 +152,13 @@ async def upload_circuit(
     if existing.scalar_one_or_none():
         raise HTTPException(409, "Circuit with this hash already exists")
 
-    # Check name+version unique
+    # Check name+version unique (among non-deleted circuits)
     existing_nv = await db.execute(
-        select(CircuitRow).where(CircuitRow.name == body.name, CircuitRow.version == body.version)
+        select(CircuitRow).where(
+            CircuitRow.name == body.name,
+            CircuitRow.version == body.version,
+            CircuitRow.deleted_at.is_(None),
+        )
     )
     if existing_nv.scalar_one_or_none():
         raise HTTPException(409, f"Circuit {body.name}@{body.version} already exists")
@@ -226,7 +230,9 @@ async def get_circuit(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Get circuit details by ID."""
-    row = (await db.execute(select(CircuitRow).where(CircuitRow.id == circuit_id))).scalar_one_or_none()
+    row = (await db.execute(
+        select(CircuitRow).where(CircuitRow.id == circuit_id, CircuitRow.deleted_at.is_(None))
+    )).scalar_one_or_none()
     if not row:
         raise HTTPException(404, "Circuit not found")
     return _circuit_to_response(row)
@@ -238,7 +244,9 @@ async def get_circuit_by_hash(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Get circuit by content hash."""
-    row = (await db.execute(select(CircuitRow).where(CircuitRow.circuit_hash == circuit_hash))).scalar_one_or_none()
+    row = (await db.execute(
+        select(CircuitRow).where(CircuitRow.circuit_hash == circuit_hash, CircuitRow.deleted_at.is_(None))
+    )).scalar_one_or_none()
     if not row:
         raise HTTPException(404, "Circuit not found")
     return _circuit_to_response(row)
