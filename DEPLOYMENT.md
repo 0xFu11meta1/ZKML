@@ -164,8 +164,9 @@ The default `docker-compose.yml` already binds IPFS API to `127.0.0.1:5001` (loc
 # CORRECT — internal only
 ipfs:
   ports:
-    - "127.0.0.1:5001:5001"   # API — internal only
-    - "8080:8080"              # Gateway — read-only, safe to expose
+    - "127.0.0.1:5001:5001" # API — internal only
+    - "8080:8080" # Gateway — read-only, safe to expose
+
 
 # WRONG — exposes writable API to the internet
 # ipfs:
@@ -192,3 +193,13 @@ ipfs:
 | 429 Too Many Requests              | Rate limit: 120 req/60s per client — check `Retry-After` header            |
 | CSRF validation failed             | `Origin` header must match server host, or use `Authorization: Bearer`     |
 | Worker tasks stuck                 | Check Flower UI, restart workers with `docker compose restart worker`      |
+
+## Operational Runbooks
+
+- [Environment Setup](docs/environment-setup.md)
+- [Database Migration](docs/database-migration.md)
+- [Celery Operations](docs/celery-operations.md)
+- [IPFS Operations](docs/ipfs-operations.md)
+- [Alert Runbooks](docs/alert-runbooks.md)
+- [Proof Job Diagnostics](docs/proof-job-diagnostics.md)
+- [Encryption Key Management](docs/encryption-key-management.md)

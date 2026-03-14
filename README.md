@@ -153,6 +153,16 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 
 For production deployment, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
+Operational runbooks:
+
+- [docs/environment-setup.md](docs/environment-setup.md)
+- [docs/database-migration.md](docs/database-migration.md)
+- [docs/celery-operations.md](docs/celery-operations.md)
+- [docs/ipfs-operations.md](docs/ipfs-operations.md)
+- [docs/alert-runbooks.md](docs/alert-runbooks.md)
+- [docs/proof-job-diagnostics.md](docs/proof-job-diagnostics.md)
+- [docs/encryption-key-management.md](docs/encryption-key-management.md)
+
 ## API Endpoints
 
 ### ZK Prover Network
