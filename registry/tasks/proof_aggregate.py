@@ -181,6 +181,56 @@ async def _aggregate_job(db, job) -> None:
         data = await storage.download_bytes(cid)
         fragments.append(data)
 
+    # Pre-verify individual fragments before aggregation to avoid wasting
+    # compute on combining invalid proofs.
+    invalid_partitions: list[int] = []
+    try:
+        from prover.python.modelionn_prover import ProverEngine, CircuitData, ProofResult, ProofSystem, CircuitType
+
+        ps_map = {"groth16": ProofSystem.GROTH16, "plonk": ProofSystem.PLONK,
+                   "halo2": ProofSystem.HALO2, "stark": ProofSystem.STARK}
+        proof_type_str = circuit.proof_type if isinstance(circuit.proof_type, str) else circuit.proof_type.value
+        ps = ps_map.get(proof_type_str, ProofSystem.GROTH16)
+
+        vk_bytes = b""
+        if circuit.verification_key_cid:
+            vk_bytes = await storage.download_bytes(circuit.verification_key_cid)
+
+        engine = ProverEngine()
+        for idx, frag_data in enumerate(fragments):
+            try:
+                cd = CircuitData(
+                    id=str(circuit.id), name=circuit.name, proof_system=ps,
+                    circuit_type=CircuitType.GENERAL, num_constraints=circuit.num_constraints,
+                    num_public_inputs=0, num_private_inputs=0,
+                    data=b"", proving_key=b"", verification_key=vk_bytes,
+                )
+                pr = ProofResult(
+                    proof_system=ps, data=frag_data,
+                    public_inputs=job.public_inputs_json.encode() if job.public_inputs_json else b"",
+                    generation_time_ms=0, proof_size_bytes=len(frag_data),
+                )
+                if not await engine.verify(cd, pr):
+                    invalid_partitions.append(idx)
+                    logger.warning("Job %d partition %d: fragment verification failed", job.id, idx)
+            except Exception as exc:
+                invalid_partitions.append(idx)
+                logger.warning("Job %d partition %d: fragment verification error: %s", job.id, idx, exc)
+    except ImportError:
+        logger.debug("Rust prover unavailable — skipping per-fragment pre-verification")
+
+    if invalid_partitions:
+        valid_ratio = (len(fragments) - len(invalid_partitions)) / len(fragments)
+        if valid_ratio < 0.7:
+            raise ValueError(
+                f"Too many invalid fragments ({len(invalid_partitions)}/{len(fragments)}); "
+                f"partitions {invalid_partitions}"
+            )
+        logger.warning(
+            "Job %d: %d/%d fragments invalid but proceeding (%.0f%% valid)",
+            job.id, len(invalid_partitions), len(fragments), valid_ratio * 100,
+        )
+
     combined = b"".join(fragments)
     proof_hash = hashlib.sha256(combined).hexdigest()
 
