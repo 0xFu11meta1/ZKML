@@ -90,8 +90,13 @@ async def _aggregate_sweep(task) -> dict:
                     await fire_webhooks_for_job(job.id, "proof.timeout", {
                         "job_id": job.id, "task_id": job.task_id, "error": job.error,
                     })
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to queue timeout webhook for job %d: %s",
+                        job.id,
+                        exc,
+                        exc_info=True,
+                    )
                 continue
 
             # Count partition statuses
@@ -126,8 +131,13 @@ async def _aggregate_sweep(task) -> dict:
                         await fire_webhooks_for_job(job.id, "proof.failed", {
                             "job_id": job.id, "task_id": job.task_id, "error": job.error,
                         })
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.warning(
+                            "Failed to queue failure webhook for job %d: %s",
+                            job.id,
+                            exc,
+                            exc_info=True,
+                        )
                 continue
 
             # All partitions completed — aggregate
@@ -135,7 +145,7 @@ async def _aggregate_sweep(task) -> dict:
                 await _aggregate_job(db, job)
                 aggregated += 1
             except Exception as exc:
-                logger.error("Aggregation failed for job %d: %s", job.id, exc)
+                logger.error("Aggregation failed for job %d: %s", job.id, exc, exc_info=True)
                 job.status = ProofJobStatus.FAILED
                 job.error = f"Aggregation error: {str(exc)[:500]}"
                 job.completed_at = datetime.now(timezone.utc)
