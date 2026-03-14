@@ -32,11 +32,11 @@ MODELIONN_HOTKEY=5FYourKey MODELIONN_SIGN_KEY=your-sign-key \
 
 The locustfile defines three user types with different traffic patterns:
 
-| User Type | Weight | Behavior |
-|-----------|--------|----------|
-| `ReadOnlyUser` | 5 | Reads circuits, provers, stats — high frequency |
-| `ProofRequester` | 2 | Requests proofs, polls status — medium frequency |
-| `AdminUser` | 1 | Org management, API keys, audit logs — low frequency |
+| User Type        | Weight | Behavior                                             |
+| ---------------- | ------ | ---------------------------------------------------- |
+| `ReadOnlyUser`   | 5      | Reads circuits, provers, stats — high frequency      |
+| `ProofRequester` | 2      | Requests proofs, polls status — medium frequency     |
+| `AdminUser`      | 1      | Org management, API keys, audit logs — low frequency |
 
 ## Interpreting Results
 

@@ -310,7 +310,8 @@ export default function SettingsPage() {
                 </Button>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Use this secret to verify webhook signatures (HMAC-SHA256 of the payload).
+                Use this secret to verify webhook signatures (HMAC-SHA256 of the
+                payload).
               </p>
               <Button
                 size="sm"
@@ -327,7 +328,9 @@ export default function SettingsPage() {
           {showWebhookForm && (
             <div className="rounded-lg border p-4 space-y-3">
               <div>
-                <label className="block text-sm font-medium mb-1">URL (HTTPS)</label>
+                <label className="block text-sm font-medium mb-1">
+                  URL (HTTPS)
+                </label>
                 <input
                   type="url"
                   value={webhookUrl}
@@ -370,7 +373,9 @@ export default function SettingsPage() {
               <Button
                 size="sm"
                 onClick={handleCreateWebhook}
-                disabled={createWebhook.isPending || !webhookUrl.startsWith("https://")}
+                disabled={
+                  createWebhook.isPending || !webhookUrl.startsWith("https://")
+                }
               >
                 {createWebhook.isPending ? "Creating…" : "Create"}
               </Button>
@@ -397,7 +402,9 @@ export default function SettingsPage() {
                         {(wh.label as string) || (wh.url as string)}
                       </span>
                       <Badge
-                        variant={(wh.active as boolean) ? "default" : "secondary"}
+                        variant={
+                          (wh.active as boolean) ? "default" : "secondary"
+                        }
                         className="text-xs"
                       >
                         {(wh.active as boolean) ? "Active" : "Paused"}
@@ -418,7 +425,9 @@ export default function SettingsPage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => toggleWebhook(wh.id as number, wh.active as boolean)}
+                      onClick={() =>
+                        toggleWebhook(wh.id as number, wh.active as boolean)
+                      }
                       title={(wh.active as boolean) ? "Pause" : "Activate"}
                     >
                       <Power className="h-4 w-4" />

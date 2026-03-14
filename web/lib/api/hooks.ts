@@ -247,8 +247,16 @@ export function useCreateWebhook() {
 export function useUpdateWebhook() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: number; url?: string; label?: string; events?: string[]; active?: boolean }) =>
-      api.updateWebhook(id, body),
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: number;
+      url?: string;
+      label?: string;
+      events?: string[];
+      active?: boolean;
+    }) => api.updateWebhook(id, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["webhooks"] }),
   });
 }

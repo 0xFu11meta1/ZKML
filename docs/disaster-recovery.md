@@ -2,10 +2,10 @@
 
 ## 1. Recovery Objectives
 
-| Metric | Target | Notes |
-|--------|--------|-------|
-| **RTO** (Recovery Time Objective) | ≤ 30 minutes | Time from incident detection to full service restoration |
-| **RPO** (Recovery Point Objective) | ≤ 24 hours | Maximum acceptable data loss (aligned with daily backup) |
+| Metric                             | Target       | Notes                                                    |
+| ---------------------------------- | ------------ | -------------------------------------------------------- |
+| **RTO** (Recovery Time Objective)  | ≤ 30 minutes | Time from incident detection to full service restoration |
+| **RPO** (Recovery Point Objective) | ≤ 24 hours   | Maximum acceptable data loss (aligned with daily backup) |
 
 ---
 
@@ -151,11 +151,11 @@ docker compose -f docker-compose.prod.yml exec registry alembic downgrade -1
 
 ## 4. Communication & Escalation
 
-| Severity | Trigger | Response |
-|----------|---------|----------|
-| **P1 — Critical** | All provers offline, database down, API unreachable | Immediate: page on-call engineer |
-| **P2 — High** | Proof queue > 100, P99 latency > 300s, single worker down | Within 15 min: investigate and resolve |
-| **P3 — Warning** | Low prover count, elevated API key rejections | Within 1 hour: monitor and plan fix |
+| Severity          | Trigger                                                   | Response                               |
+| ----------------- | --------------------------------------------------------- | -------------------------------------- |
+| **P1 — Critical** | All provers offline, database down, API unreachable       | Immediate: page on-call engineer       |
+| **P2 — High**     | Proof queue > 100, P99 latency > 300s, single worker down | Within 15 min: investigate and resolve |
+| **P3 — Warning**  | Low prover count, elevated API key rejections             | Within 1 hour: monitor and plan fix    |
 
 Alertmanager is configured to route alerts via webhook. Configure `docker/alertmanager/alertmanager.yml` to send notifications to your preferred channel (Slack, PagerDuty, email).
 
@@ -177,8 +177,8 @@ After any recovery, verify:
 
 ## 6. Periodic Drills
 
-| Drill | Frequency | Procedure |
-|-------|-----------|-----------|
-| Backup restore test | Monthly | Restore latest backup to a staging database, verify schema and data |
-| Failover simulation | Quarterly | Stop primary host, recover on standby using off-site backups |
-| Runbook review | Quarterly | Review this document and all referenced scripts for accuracy |
+| Drill               | Frequency | Procedure                                                           |
+| ------------------- | --------- | ------------------------------------------------------------------- |
+| Backup restore test | Monthly   | Restore latest backup to a staging database, verify schema and data |
+| Failover simulation | Quarterly | Stop primary host, recover on standby using off-site backups        |
+| Runbook review      | Quarterly | Review this document and all referenced scripts for accuracy        |

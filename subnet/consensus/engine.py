@@ -11,6 +11,7 @@ disagree with the majority.
 from __future__ import annotations
 
 import logging
+import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -23,6 +24,8 @@ CONSENSUS_THRESHOLD = 0.66      # 66% agreement required
 MAX_VALIDATORS_PER_PROOF = 5    # Maximum validators verifying a single proof
 DIVERGENCE_WINDOW = 50          # Rolling window for divergence tracking
 SLASH_THRESHOLD = 0.20          # Slash if >20% divergence rate
+VALIDATOR_EVICTION_SECONDS = 3600   # Evict validators with no activity for 1 hour
+PENDING_VOTE_EXPIRY_SECONDS = 600   # Remove pending votes older than 10 minutes
 
 
 @dataclass
@@ -63,11 +66,13 @@ class ValidatorState:
     slash_count: int = 0
     avg_verification_time_ms: float = 0.0
     total_proofs_verified: int = 0
+    last_active: float = field(default_factory=time.monotonic)
 
     def update(self, agreed: bool, verification_time_ms: int = 0) -> None:
         """Update reliability after a consensus round."""
         self.total_validations += 1
         self.recent_results.append(agreed)
+        self.last_active = time.monotonic()
         if agreed:
             self.agreements += 1
         else:
@@ -111,6 +116,7 @@ class ConsensusEngine:
     def __init__(self) -> None:
         self._validators: dict[str, ValidatorState] = {}
         self._pending_votes: dict[str, list[VerificationVote]] = {}  # "job_id:part_idx" → votes
+        self._vote_timestamps: dict[str, float] = {}  # "job_id:part_idx" → first vote time
 
     def get_or_create_validator(self, hotkey: str) -> ValidatorState:
         if hotkey not in self._validators:
@@ -157,6 +163,8 @@ class ConsensusEngine:
         """Submit a proof verification vote from a validator."""
         key = f"{vote.job_id}:{vote.partition_index}"
         self._pending_votes.setdefault(key, [])
+        if key not in self._vote_timestamps:
+            self._vote_timestamps[key] = time.monotonic()
         for existing in self._pending_votes[key]:
             if existing.validator_hotkey == vote.validator_hotkey:
                 logger.warning("Duplicate vote from %s for %s", vote.validator_hotkey, key)
@@ -231,7 +239,33 @@ class ConsensusEngine:
         )
 
         self._pending_votes.pop(key, None)
+        self._vote_timestamps.pop(key, None)
         return result
+
+    def cleanup(self) -> None:
+        """Remove stale validators and expired pending votes to prevent unbounded growth."""
+        now = time.monotonic()
+
+        # Evict validators with no activity for VALIDATOR_EVICTION_SECONDS
+        stale_validators = [
+            hk for hk, vs in self._validators.items()
+            if now - vs.last_active > VALIDATOR_EVICTION_SECONDS
+        ]
+        for hk in stale_validators:
+            del self._validators[hk]
+        if stale_validators:
+            logger.info("ConsensusEngine: evicted %d stale validators", len(stale_validators))
+
+        # Remove pending votes older than PENDING_VOTE_EXPIRY_SECONDS
+        stale_votes = [
+            key for key, ts in self._vote_timestamps.items()
+            if now - ts > PENDING_VOTE_EXPIRY_SECONDS
+        ]
+        for key in stale_votes:
+            self._pending_votes.pop(key, None)
+            self._vote_timestamps.pop(key, None)
+        if stale_votes:
+            logger.info("ConsensusEngine: expired %d stale pending vote sets", len(stale_votes))
 
     def get_validator_state(self, hotkey: str) -> ValidatorState | None:
         return self._validators.get(hotkey)

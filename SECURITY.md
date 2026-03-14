@@ -51,12 +51,12 @@ Do NOT open a public GitHub issue for security-sensitive bugs. We will acknowled
 
 ### Assumed Adversary Capabilities
 
-| Threat Actor | Capabilities |
-|---|---|
-| External attacker | HTTP requests, network scanning |
-| Malicious miner | Submits invalid proofs, front-runs circuit uploads |
+| Threat Actor        | Capabilities                                       |
+| ------------------- | -------------------------------------------------- |
+| External attacker   | HTTP requests, network scanning                    |
+| Malicious miner     | Submits invalid proofs, front-runs circuit uploads |
 | Malicious validator | Submits biased votes, attempts weight manipulation |
-| Compromised API key | Authenticated API access within daily limits |
+| Compromised API key | Authenticated API access within daily limits       |
 
 ---
 
@@ -74,11 +74,11 @@ All identities are Bittensor wallets (Ed25519 keypairs). Authentication works vi
 
 ### Organization RBAC
 
-| Role | Permissions |
-|---|---|
-| `viewer` | Read org circuits, proofs, members |
-| `editor` | Upload circuits, request proofs |
-| `admin` | Manage members, change settings, delete resources |
+| Role     | Permissions                                       |
+| -------- | ------------------------------------------------- |
+| `viewer` | Read org circuits, proofs, members                |
+| `editor` | Upload circuits, request proofs                   |
+| `admin`  | Manage members, change settings, delete resources |
 
 Membership is enforced at the route level via `require_org_role()`.
 
@@ -88,15 +88,15 @@ Membership is enforced at the route level via `require_org_role()`.
 
 ### Middleware Stack (Applied in Order)
 
-| Layer | Purpose |
-|---|---|
-| `RequestIDMiddleware` | Attach unique request ID for tracing |
-| `SecurityHeadersMiddleware` | CSP, HSTS, X-Frame-Options, referrer policy |
-| `TenantMiddleware` | Resolve org tenant from path |
-| `APIKeyAuthMiddleware` | Validate API key if present |
-| `RequestSizeLimitMiddleware` | Reject payloads > 50 MB |
-| `RateLimitMiddleware` | Per-IP + per-hotkey rate limiting |
-| `CSRFMiddleware` | Validate CSRF token for state-changing requests |
+| Layer                        | Purpose                                         |
+| ---------------------------- | ----------------------------------------------- |
+| `RequestIDMiddleware`        | Attach unique request ID for tracing            |
+| `SecurityHeadersMiddleware`  | CSP, HSTS, X-Frame-Options, referrer policy     |
+| `TenantMiddleware`           | Resolve org tenant from path                    |
+| `APIKeyAuthMiddleware`       | Validate API key if present                     |
+| `RequestSizeLimitMiddleware` | Reject payloads > 50 MB                         |
+| `RateLimitMiddleware`        | Per-IP + per-hotkey rate limiting               |
+| `CSRFMiddleware`             | Validate CSRF token for state-changing requests |
 
 ### Rate Limiting
 
@@ -151,12 +151,12 @@ Proof verification uses a binary stake-weighted consensus:
 
 ### Anti-Sybil Gates
 
-| Gate | Purpose |
-|---|---|
-| `StakeGate` | Minimum TAO stake required to participate |
-| `RateLimiter` | Per-miner proof request rate limiting |
-| `GpuBenchmarkGate` | Minimum GPU benchmark score to accept proofs |
-| `ProofHashDeduplicator` | Reject duplicate proof submissions |
+| Gate                    | Purpose                                      |
+| ----------------------- | -------------------------------------------- |
+| `StakeGate`             | Minimum TAO stake required to participate    |
+| `RateLimiter`           | Per-miner proof request rate limiting        |
+| `GpuBenchmarkGate`      | Minimum GPU benchmark score to accept proofs |
+| `ProofHashDeduplicator` | Reject duplicate proof submissions           |
 
 ### Miner Protections
 

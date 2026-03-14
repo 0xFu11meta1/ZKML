@@ -433,6 +433,9 @@ class ValidatorNeuron(BaseNeuron):
         for jid in stale:
             del self._pending_jobs[jid]
 
+        # Periodic cleanup of consensus engine state
+        self._consensus.cleanup()
+
     async def _verify_and_finalize_job(
         self, job_id: str, job: dict, partition_done: dict[int, dict],
     ) -> None:
