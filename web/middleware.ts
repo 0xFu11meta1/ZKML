@@ -37,13 +37,10 @@ export async function middleware(request: NextRequest) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   // Build CSP header
-  // NOTE: style-src 'unsafe-inline' is required for Tailwind CSS inline styles.
-  // This is a known limitation — removing it would require extracting all styles
-  // to external CSS files, which is a major Tailwind refactor.
   const csp = [
     `default-src 'self'`,
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    `style-src 'self' 'unsafe-inline'`,
+    `style-src 'self' 'nonce-${nonce}'`,
     `img-src 'self' data: https:`,
     `connect-src 'self' ${apiUrl}`,
     `font-src 'self' data:`,
