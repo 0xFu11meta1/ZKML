@@ -71,6 +71,7 @@ class WebhookResponse(BaseModel):
     label: str
     events: list[str]
     active: bool
+    secret: str | None = None
     created_at: str
     last_triggered_at: str | None
 
@@ -184,6 +185,7 @@ async def update_webhook(
         "label": row.label,
         "events": row.events.split(",") if row.events else ["*"],
         "active": row.active,
+        "secret": row.secret,
         "created_at": row.created_at.isoformat() if row.created_at else "",
         "last_triggered_at": row.last_triggered_at.isoformat() if row.last_triggered_at else None,
     }
