@@ -108,6 +108,20 @@ services:
       timeout: 5s
       retries: 3
 
+  alertmanager:
+    restart: unless-stopped
+    # In production, expose via reverse proxy only
+    ports: !reset []
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q --spider http://localhost:9093/-/healthy || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
   grafana:
     restart: unless-stopped
     environment:
