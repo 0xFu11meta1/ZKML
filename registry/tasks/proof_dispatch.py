@@ -131,8 +131,26 @@ async def _dispatch_async(task, job_id: int) -> dict:
                 .with_for_update()
             )).scalars().all()
 
+            # Weighted selection by benchmark score to avoid overloading slower provers.
+            total_score = sum(max(float(p.benchmark_score or 0.0), 0.0) for p in provers)
+            if total_score <= 0:
+                cumulative_weights = [float(i + 1) / float(len(provers)) for i in range(len(provers))]
+            else:
+                running = 0.0
+                cumulative_weights = []
+                for p in provers:
+                    running += max(float(p.benchmark_score or 0.0), 0.0) / total_score
+                    cumulative_weights.append(running)
+
+            def _pick_weighted(index: int):
+                cursor = ((index * 2654435761) % 10_000) / 10_000.0
+                for pos, boundary in enumerate(cumulative_weights):
+                    if cursor <= boundary:
+                        return provers[pos]
+                return provers[-1]
+
             for i, partition in enumerate(partitions):
-                prover = provers[i % len(provers)]
+                prover = _pick_weighted(i)
                 partition.assigned_prover = prover.hotkey
                 partition.status = "assigned"
                 partition.assigned_at = datetime.now(timezone.utc)
