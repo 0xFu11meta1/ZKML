@@ -409,6 +409,45 @@ def network_stats(
     console.print(f"  Total GPU VRAM:  {vram_gb:.1f} GB")
 
 
+# ── Register prover ─────────────────────────────────────────
+
+@app.command(name="register-prover")
+def register_prover(
+    gpu_name: str = typer.Option(..., "--gpu", help="GPU model name (e.g. 'NVIDIA RTX 4090')"),
+    gpu_backend: str = typer.Option("cuda", "--gpu-backend", help="GPU backend: cuda, rocm, metal, cpu"),
+    gpu_count: int = typer.Option(1, "--gpu-count", help="Number of GPUs"),
+    vram_bytes: int = typer.Option(0, "--vram", help="Total VRAM in bytes"),
+    proof_systems: str = typer.Option("groth16,plonk,halo2,stark", "--proof-systems", help="Supported proof systems (comma-separated)"),
+    benchmark_score: float = typer.Option(0.0, "--benchmark-score", help="GPU benchmark score"),
+    registry: str = typer.Option("", "--registry", "-r"),
+    hotkey: str = typer.Option("", "--hotkey", "-k"),
+    output_json: bool = typer.Option(False, "--json"),
+):
+    """Register this node as a ZK prover with its GPU capabilities."""
+    hk = _resolve_hotkey(hotkey)
+    err = _validate_hotkey(hk)
+    if err:
+        console.print(f"[red]Error:[/] {err}")
+        raise typer.Exit(1)
+
+    client = _client(registry, hotkey)
+    data = client.register_prover(
+        gpu_name=gpu_name,
+        gpu_backend=gpu_backend,
+        gpu_count=gpu_count,
+        vram_total_bytes=vram_bytes,
+        supported_proof_types=proof_systems,
+        benchmark_score=benchmark_score,
+    )
+    if output_json:
+        _json_output(data)
+        return
+    console.print("[green]✓[/] Prover registered successfully")
+    console.print(f"  Hotkey:    {hk[:12]}…{hk[-6:]}")
+    console.print(f"  GPU:       {gpu_name} ({gpu_backend})")
+    console.print(f"  Systems:   {proof_systems}")
+
+
 # ── Auth status ──────────────────────────────────────────────
 
 @app.command(name="auth")

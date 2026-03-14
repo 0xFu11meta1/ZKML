@@ -358,6 +358,15 @@ class AsyncModelionnClient:
             headers=self._auth_headers(),
         )
 
+    async def update_member_role(self, slug: str, member_hotkey: str, *, role: str) -> dict[str, Any]:
+        """Update a member's role in an organization (requires ADMIN role)."""
+        resp = await self._request(
+            "PATCH", f"{self._url}/orgs/{slug}/members/{member_hotkey}",
+            params={"role": role},
+            headers=self._auth_headers(),
+        )
+        return resp.json()
+
     # ── API Keys ─────────────────────────────────────────────
 
     async def create_api_key(self, *, label: str = "", daily_limit: int = 1000) -> dict[str, Any]:
