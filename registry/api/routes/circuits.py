@@ -145,20 +145,20 @@ async def upload_circuit(
     hash_input = f"{body.name}:{body.version}:{body.ipfs_cid}:{body.num_constraints}"
     circuit_hash = hashlib.sha256(hash_input.encode()).hexdigest()
 
-    # Check duplicate
+    # Check duplicate (lock row to prevent TOCTOU race)
     existing = await db.execute(
-        select(CircuitRow).where(CircuitRow.circuit_hash == circuit_hash)
+        select(CircuitRow).where(CircuitRow.circuit_hash == circuit_hash).with_for_update()
     )
     if existing.scalar_one_or_none():
         raise HTTPException(409, "Circuit with this hash already exists")
 
-    # Check name+version unique (among non-deleted circuits)
+    # Check name+version unique (among non-deleted circuits, locked)
     existing_nv = await db.execute(
         select(CircuitRow).where(
             CircuitRow.name == body.name,
             CircuitRow.version == body.version,
             CircuitRow.deleted_at.is_(None),
-        )
+        ).with_for_update()
     )
     if existing_nv.scalar_one_or_none():
         raise HTTPException(409, f"Circuit {body.name}@{body.version} already exists")

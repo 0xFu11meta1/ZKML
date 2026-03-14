@@ -179,14 +179,30 @@ async def request_proof(
         raise HTTPException(400, f"Invalid witness CID format: {body.witness_cid[:40]}")
 
     # Rate limit: max 10 pending jobs per user
+    _active_statuses = [ProofJobStatus.QUEUED.value, ProofJobStatus.DISPATCHED.value, ProofJobStatus.PROVING.value]
     pending_count = (await db.execute(
         select(func.count()).select_from(ProofJobRow).where(
             ProofJobRow.requester_hotkey == requester_hotkey,
-            ProofJobRow.status.in_([ProofJobStatus.QUEUED.value, ProofJobStatus.DISPATCHED.value, ProofJobStatus.PROVING.value]),
+            ProofJobRow.status.in_(_active_statuses),
         )
     )).scalar() or 0
     if pending_count >= 10:
         raise HTTPException(429, "Too many pending proof jobs (max 10)")
+
+    # Dedup: reject if an identical job (same circuit + witness) is already active
+    dup = (await db.execute(
+        select(ProofJobRow.id).where(
+            ProofJobRow.requester_hotkey == requester_hotkey,
+            ProofJobRow.circuit_id == body.circuit_id,
+            ProofJobRow.witness_cid == body.witness_cid,
+            ProofJobRow.status.in_(_active_statuses),
+        ).limit(1)
+    )).scalar_one_or_none()
+    if dup:
+        raise HTTPException(
+            409,
+            "A proof job for this circuit and witness is already in progress",
+        )
 
     task_id = uuid.uuid4().hex[:16]
 
