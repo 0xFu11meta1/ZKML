@@ -140,6 +140,46 @@ server {
 }
 ```
 
+## IPFS Node Security
+
+The IPFS Kubo API (port **5001**) grants full read/write access to the node — including pinning, garbage collection, and configuration changes. **Never expose port 5001 to the public internet.**
+
+### Firewall Rules
+
+```bash
+# Allow IPFS API only from localhost and the Docker bridge network
+sudo ufw deny 5001
+sudo ufw allow from 172.16.0.0/12 to any port 5001  # Docker internal
+sudo ufw allow from 127.0.0.1 to any port 5001
+
+# The IPFS gateway (port 8080) is read-only and safe to expose if needed
+# sudo ufw allow 8080
+```
+
+### Docker Compose
+
+The default `docker-compose.yml` already binds IPFS API to `127.0.0.1:5001` (localhost only). Verify this is _not_ changed to `0.0.0.0:5001` in production overrides:
+
+```yaml
+# CORRECT — internal only
+ipfs:
+  ports:
+    - "127.0.0.1:5001:5001"   # API — internal only
+    - "8080:8080"              # Gateway — read-only, safe to expose
+
+# WRONG — exposes writable API to the internet
+# ipfs:
+#   ports:
+#     - "5001:5001"
+```
+
+### Additional Recommendations
+
+- **IPFS_API_URL** should always point to a private address (`http://ipfs:5001` inside Docker, or `http://127.0.0.1:5001` on the host).
+- Enable IPFS API authentication if running Kubo ≥ 0.25 (see [Kubo docs](https://docs.ipfs.tech/reference/kubo-rpc-cli/)).
+- Review `Access-Control-Allow-Origin` in IPFS config — restrict to known origins.
+- Pin only content uploaded through the registry; run periodic `ipfs repo gc` to reclaim storage from unpinned objects.
+
 ## Troubleshooting
 
 | Symptom                            | Fix                                                                        |
