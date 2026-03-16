@@ -4,7 +4,6 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useProofJob, useProofJobPartitions, useProofs } from "@/lib/api";
 import { useProofJobSSE } from "@/lib/realtime";
@@ -39,9 +38,6 @@ export default function ProofDetailPage() {
     job?.status && ["completed", "failed", "timeout"].includes(job.status);
   const { job: sseJob } = useProofJobSSE(!isTerminal ? taskId : undefined);
 
-  // Prefer SSE data when available (fresher) — fall back to polled data
-  const liveJob = sseJob ?? job;
-
   if (isLoading) {
     return (
       <div className="space-y-6 animate-fade-in">
@@ -69,6 +65,10 @@ export default function ProofDetailPage() {
       </div>
     );
   }
+
+  // Prefer SSE data when available (fresher) — fall back to polled data.
+  // `job` is guaranteed here due to the early return above.
+  const liveJob = sseJob ?? job;
 
   const progress =
     liveJob.num_partitions > 0

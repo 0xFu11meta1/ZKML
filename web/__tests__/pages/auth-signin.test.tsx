@@ -24,7 +24,9 @@ describe("SignInPage", () => {
     Object.defineProperty(global, "crypto", {
       value: {
         subtle: {
-          digest: jest.fn().mockResolvedValue(new Uint8Array([1, 2, 3, 4]).buffer),
+          digest: jest
+            .fn()
+            .mockResolvedValue(new Uint8Array([1, 2, 3, 4]).buffer),
         },
       },
       writable: true,
@@ -68,7 +70,10 @@ describe("SignInPage", () => {
       expect(signInMock).toHaveBeenCalledTimes(1);
     });
 
-    const [provider, payload] = signInMock.mock.calls[0] as [string, Record<string, unknown>];
+    const [provider, payload] = signInMock.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
     expect(provider).toBe("wallet");
     expect(payload.hotkey).toBe("5D4vSuccess");
     expect(payload.callbackUrl).toBe("/proofs");
@@ -91,6 +96,10 @@ describe("SignInPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Connect Wallet" }));
 
-    expect(await screen.findByText("Authentication failed. Please check your hotkey.")).toBeTruthy();
+    expect(
+      await screen.findByText(
+        "Authentication failed. Please check your hotkey.",
+      ),
+    ).toBeTruthy();
   });
 });

@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function SignInPage() {
+function SignInPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/";
@@ -36,7 +36,7 @@ export default function SignInPage() {
       // Production: require real Bittensor wallet signing via browser extension
       setLoading(false);
       setError(
-        "Wallet signing required. Install the Bittensor wallet extension or enable NEXT_PUBLIC_DEV_AUTH for development."
+        "Wallet signing required. Install the Bittensor wallet extension or enable NEXT_PUBLIC_DEV_AUTH for development.",
       );
       return;
     }
@@ -102,5 +102,13 @@ export default function SignInPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignInPageContent />
+    </Suspense>
   );
 }

@@ -10,17 +10,7 @@ import {
   useProvers,
 } from "@/lib/api";
 import { formatNumber, formatBytes } from "@/lib/utils";
-import {
-  Package,
-  Download,
-  Trophy,
-  Activity,
-  ArrowRight,
-  Cpu,
-  Zap,
-  Network,
-  Clock,
-} from "lucide-react";
+import { ArrowRight, Cpu, Zap, Network, Clock } from "lucide-react";
 import Link from "next/link";
 
 export default function HomePage() {

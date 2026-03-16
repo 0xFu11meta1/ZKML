@@ -5,13 +5,12 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useProver, useProofs } from "@/lib/api";
+import { useProver } from "@/lib/api";
 import { formatBytes, formatNumber, timeAgo } from "@/lib/utils";
 import {
   ArrowLeft,
   Cpu,
   HardDrive,
-  Zap,
   Clock,
   Activity,
   CheckCircle,

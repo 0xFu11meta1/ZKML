@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import {
@@ -25,7 +25,6 @@ export default function OrgDetailPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
   const { data: session } = useSession();
-  const router = useRouter();
 
   const { data: org, isLoading: orgLoading } = useOrg(slug);
   const { data: members, isLoading: membersLoading } = useOrgMembers(slug);

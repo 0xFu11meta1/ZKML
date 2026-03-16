@@ -1,8 +1,9 @@
 import { useEffect, useRef, useCallback, useState } from "react";
+import type { ProofJob } from "@/lib/api/client";
 
 type WSMessage = {
   type: string;
-  data: any;
+  data: unknown;
 };
 
 type UseWebSocketOptions = {
@@ -108,7 +109,7 @@ export function useWebSocket({
     };
   }, [connect]);
 
-  const send = useCallback((data: any) => {
+  const send = useCallback((data: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(
         typeof data === "string" ? data : JSON.stringify(data),
@@ -123,7 +124,7 @@ export function useWebSocket({
  * Hook for Server-Sent Events (SSE) streams.
  */
 export function useSSE(url: string, enabled: boolean = true) {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<unknown>(null);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
@@ -172,7 +173,7 @@ export function useProofJobSSE(taskId: string | undefined) {
       : "";
   const url = taskId ? `${baseUrl}/${taskId}/stream` : "";
 
-  const [job, setJob] = useState<any>(null);
+  const [job, setJob] = useState<ProofJob | null>(null);
   const [isDone, setIsDone] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -185,7 +186,7 @@ export function useProofJobSSE(taskId: string | undefined) {
 
     source.onmessage = (event) => {
       try {
-        setJob(JSON.parse(event.data));
+        setJob(JSON.parse(event.data) as ProofJob);
       } catch {
         // ignore non-JSON
       }
@@ -193,7 +194,7 @@ export function useProofJobSSE(taskId: string | undefined) {
 
     source.addEventListener("done", (event: MessageEvent) => {
       try {
-        setJob(JSON.parse(event.data));
+        setJob(JSON.parse(event.data) as ProofJob);
       } catch {
         // ignore
       }

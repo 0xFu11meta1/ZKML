@@ -75,21 +75,21 @@ describe("SettingsPage", () => {
     mockApiKeys.mockReturnValue([
       {
         id: 1,
-        label: "CI pipeline",
+        name: "CI pipeline",
         key_prefix: "mk_test_abc",
         created_at: new Date().toISOString(),
         is_active: true,
         daily_limit: 1000,
-        usage_today: 42,
+        requests_today: 42,
       },
       {
         id: 2,
-        label: "Dev local",
+        name: "Dev local",
         key_prefix: "mk_test_xyz",
         created_at: new Date().toISOString(),
         is_active: true,
         daily_limit: 500,
-        usage_today: 0,
+        requests_today: 0,
       },
     ]);
 

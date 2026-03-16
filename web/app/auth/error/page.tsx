@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,14 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 export default function AuthErrorPage() {
+  return (
+    <Suspense fallback={null}>
+      <AuthErrorPageContent />
+    </Suspense>
+  );
+}
+
+function AuthErrorPageContent() {
   const searchParams = useSearchParams();
   const error = searchParams.get("error") || "Default";
   const message = ERROR_MESSAGES[error] || ERROR_MESSAGES.Default;

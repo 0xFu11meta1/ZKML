@@ -56,7 +56,9 @@ describe("ProofsPage", () => {
     renderWithProviders(<ProofsPage />);
 
     expect(screen.getByText("No proof jobs yet")).toBeTruthy();
-    expect(screen.getByText("Request a proof to see it tracked here")).toBeTruthy();
+    expect(
+      screen.getByText("Request a proof to see it tracked here"),
+    ).toBeTruthy();
   });
 
   it("renders proof jobs table with status and links", () => {

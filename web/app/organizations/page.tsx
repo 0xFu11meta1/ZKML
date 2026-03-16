@@ -6,12 +6,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useMyOrgs, useCreateOrg } from "@/lib/api";
 import { Building2, Plus, ArrowRight } from "lucide-react";
 
 export default function OrganizationsPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const { data: orgs, isLoading } = useMyOrgs();
   const createOrg = useCreateOrg();

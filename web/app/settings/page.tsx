@@ -15,6 +15,7 @@ import {
   useUpdateWebhook,
   useDeleteWebhook,
 } from "@/lib/api";
+import type { ApiKey, Webhook } from "@/lib/api/client";
 import { Key, Plus, Trash2, Copy, Shield, Bell, Power } from "lucide-react";
 import { timeAgo } from "@/lib/utils";
 
@@ -58,10 +59,10 @@ export default function SettingsPage() {
 
   const handleCreate = async () => {
     const result = await createKey.mutateAsync({
-      label: newKeyLabel,
+      name: newKeyLabel,
       daily_limit: newKeyLimit,
     });
-    setCreatedKey(result.key);
+    setCreatedKey(result.key ?? null);
     setShowForm(false);
     setNewKeyLabel("");
     setNewKeyLimit(1000);
@@ -230,38 +231,29 @@ export default function SettingsPage() {
             </p>
           ) : (
             <div className="divide-y rounded-lg border">
-              {apiKeys.map((k: Record<string, unknown>) => (
+              {apiKeys.map((k: ApiKey) => (
                 <div
-                  key={k.id as number}
+                  key={k.id}
                   className="flex items-center justify-between px-4 py-3"
                 >
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">
-                        {(k.label as string) || "Unnamed key"}
+                        {k.name || "Unnamed key"}
                       </span>
                       <Badge variant="secondary" className="text-xs">
-                        {String(k.requests_today ?? 0)} /{" "}
-                        {String(k.daily_limit ?? 1000)}
+                        {k.requests_today} / {k.daily_limit}
                       </Badge>
-                      {k.expires_at && (
-                        <Badge variant="outline" className="text-xs">
-                          Expires {timeAgo(k.expires_at as string)}
-                        </Badge>
-                      )}
                     </div>
                     <p className="text-xs text-gray-500">
-                      Created {timeAgo(k.created_at as string)}
-                      {k.last_used_at
-                        ? ` · Last used ${timeAgo(k.last_used_at as string)}`
-                        : " · Never used"}
+                      Created {timeAgo(k.created_at)} · Prefix {k.key_prefix}
                     </p>
                   </div>
                   <Button
                     size="sm"
                     variant="ghost"
                     className="text-red-500 hover:text-red-700"
-                    onClick={() => handleRevoke(k.id as number)}
+                    onClick={() => handleRevoke(k.id)}
                     disabled={revokeKey.isPending}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -391,30 +383,26 @@ export default function SettingsPage() {
             </p>
           ) : (
             <div className="divide-y rounded-lg border">
-              {webhooks.map((wh: Record<string, unknown>) => (
+              {webhooks.map((wh: Webhook) => (
                 <div
-                  key={wh.id as number}
+                  key={wh.id}
                   className="flex items-center justify-between px-4 py-3"
                 >
                   <div className="space-y-0.5 flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium truncate">
-                        {(wh.label as string) || (wh.url as string)}
+                        {wh.label || wh.url}
                       </span>
                       <Badge
-                        variant={
-                          (wh.active as boolean) ? "default" : "secondary"
-                        }
+                        variant={wh.active ? "default" : "secondary"}
                         className="text-xs"
                       >
-                        {(wh.active as boolean) ? "Active" : "Paused"}
+                        {wh.active ? "Active" : "Paused"}
                       </Badge>
                     </div>
-                    <p className="text-xs text-gray-500 truncate">
-                      {wh.url as string}
-                    </p>
+                    <p className="text-xs text-gray-500 truncate">{wh.url}</p>
                     <div className="flex gap-1 mt-1">
-                      {(wh.events as string[]).map((evt: string) => (
+                      {wh.events.map((evt) => (
                         <Badge key={evt} variant="outline" className="text-xs">
                           {evt}
                         </Badge>
@@ -425,10 +413,8 @@ export default function SettingsPage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() =>
-                        toggleWebhook(wh.id as number, wh.active as boolean)
-                      }
-                      title={(wh.active as boolean) ? "Pause" : "Activate"}
+                      onClick={() => toggleWebhook(wh.id, wh.active)}
+                      title={wh.active ? "Pause" : "Activate"}
                     >
                       <Power className="h-4 w-4" />
                     </Button>
@@ -436,7 +422,7 @@ export default function SettingsPage() {
                       size="sm"
                       variant="ghost"
                       className="text-red-500 hover:text-red-700"
-                      onClick={() => handleDeleteWebhook(wh.id as number)}
+                      onClick={() => handleDeleteWebhook(wh.id)}
                       disabled={deleteWebhook.isPending}
                     >
                       <Trash2 className="h-4 w-4" />
