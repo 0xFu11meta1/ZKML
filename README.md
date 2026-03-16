@@ -314,6 +314,7 @@ instructions on wallet creation, registration, and running miner/validator neuro
 | [docs/monitoring-setup.md](docs/monitoring-setup.md)   | Prometheus, Grafana, Alertmanager setup       |
 | [docs/disaster-recovery.md](docs/disaster-recovery.md) | RTO/RPO targets, failover procedures          |
 | [docs/capacity-planning.md](docs/capacity-planning.md) | Resource sizing by workload tier              |
+| [docs/performance-benchmarks.md](docs/performance-benchmarks.md) | Baseline proof pipeline latency benchmarking |
 
 ## Development
 

@@ -1,4 +1,4 @@
-.PHONY: run test test-fast lint typecheck docker-up docker-down deploy-preflight build-web clean web-lint web-typecheck web-test ci
+.PHONY: run test test-fast lint typecheck docker-up docker-down deploy-preflight benchmark-proof build-web clean web-lint web-typecheck web-test ci
 
 # ── Development ────────────────────────────────────────────
 
@@ -37,6 +37,9 @@ docker-logs:
 
 deploy-preflight:
 	bash ./scripts/deploy_preflight.sh
+
+benchmark-proof:
+	python3 ./scripts/benchmark_proof_pipeline.py --circuit-id $${CIRCUIT_ID:?set CIRCUIT_ID} --witness-cid $${WITNESS_CID:?set WITNESS_CID}
 
 # ── Web Dashboard ──────────────────────────────────────────
 
