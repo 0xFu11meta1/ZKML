@@ -185,3 +185,62 @@ class TestConsensusEngine:
         r1 = engine.compute_consensus("job-5", 1)
         assert r0 is not None and r0.consensus_valid is True
         assert r1 is not None and r1.consensus_valid is False
+
+    def test_honest_majority_outvotes_single_malicious_validator(self):
+        engine = ConsensusEngine()
+
+        # 2 honest validators vote valid, 1 malicious validator votes invalid.
+        engine.submit_vote(VerificationVote(
+            validator_hotkey="honest-1", job_id="job-6", partition_index=0, valid=True,
+        ))
+        engine.submit_vote(VerificationVote(
+            validator_hotkey="honest-2", job_id="job-6", partition_index=0, valid=True,
+        ))
+        engine.submit_vote(VerificationVote(
+            validator_hotkey="malicious", job_id="job-6", partition_index=0, valid=False,
+        ))
+
+        result = engine.compute_consensus("job-6", 0)
+        assert result is not None
+        assert result.reached_consensus
+        assert result.consensus_valid is True
+        assert "malicious" in result.diverging_validators
+
+    def test_stake_skew_can_flip_consensus_even_if_vote_count_is_lower(self):
+        engine = ConsensusEngine()
+
+        # Two low-stake honest votes can be outweighed by one high-stake malicious vote.
+        engine.submit_vote(VerificationVote(
+            validator_hotkey="honest-1", job_id="job-7", partition_index=0, valid=True,
+        ))
+        engine.submit_vote(VerificationVote(
+            validator_hotkey="honest-2", job_id="job-7", partition_index=0, valid=True,
+        ))
+        engine.submit_vote(VerificationVote(
+            validator_hotkey="malicious-whale", job_id="job-7", partition_index=0, valid=False,
+        ))
+
+        stakes = {
+            "honest-1": 1.0,
+            "honest-2": 1.0,
+            "malicious-whale": 100.0,
+        }
+        result = engine.compute_consensus("job-7", 0, stakes=stakes)
+        assert result is not None
+        assert result.reached_consensus
+        assert result.consensus_valid is False
+        assert "malicious-whale" in result.agreeing_validators
+
+    def test_cleanup_expires_stale_pending_votes(self):
+        engine = ConsensusEngine()
+        engine.submit_vote(VerificationVote(
+            validator_hotkey="val-1", job_id="job-8", partition_index=0, valid=True,
+        ))
+
+        key = "job-8:0"
+        # Simulate a partitioned/stalled verification set that never reached quorum.
+        engine._vote_timestamps[key] = 0.0
+        engine.cleanup()
+
+        assert key not in engine._pending_votes
+        assert key not in engine._vote_timestamps
