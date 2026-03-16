@@ -306,15 +306,15 @@ instructions on wallet creation, registration, and running miner/validator neuro
 
 ## Operational Guides
 
-| Guide                                                  | Description                                   |
-| ------------------------------------------------------ | --------------------------------------------- |
-| [DEPLOYMENT.md](DEPLOYMENT.md)                         | Production deployment with Docker Compose     |
-| [SECURITY.md](SECURITY.md)                             | Threat model, authentication flows, hardening |
-| [docs/tls-setup.md](docs/tls-setup.md)                 | TLS/HTTPS with Nginx or Caddy                 |
-| [docs/monitoring-setup.md](docs/monitoring-setup.md)   | Prometheus, Grafana, Alertmanager setup       |
-| [docs/disaster-recovery.md](docs/disaster-recovery.md) | RTO/RPO targets, failover procedures          |
-| [docs/capacity-planning.md](docs/capacity-planning.md) | Resource sizing by workload tier              |
-| [docs/performance-benchmarks.md](docs/performance-benchmarks.md) | Baseline proof pipeline latency benchmarking |
+| Guide                                                            | Description                                   |
+| ---------------------------------------------------------------- | --------------------------------------------- |
+| [DEPLOYMENT.md](DEPLOYMENT.md)                                   | Production deployment with Docker Compose     |
+| [SECURITY.md](SECURITY.md)                                       | Threat model, authentication flows, hardening |
+| [docs/tls-setup.md](docs/tls-setup.md)                           | TLS/HTTPS with Nginx or Caddy                 |
+| [docs/monitoring-setup.md](docs/monitoring-setup.md)             | Prometheus, Grafana, Alertmanager setup       |
+| [docs/disaster-recovery.md](docs/disaster-recovery.md)           | RTO/RPO targets, failover procedures          |
+| [docs/capacity-planning.md](docs/capacity-planning.md)           | Resource sizing by workload tier              |
+| [docs/performance-benchmarks.md](docs/performance-benchmarks.md) | Baseline proof pipeline latency benchmarking  |
 
 ## Development
 
