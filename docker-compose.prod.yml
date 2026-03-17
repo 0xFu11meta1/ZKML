@@ -33,6 +33,11 @@ services:
       MODELIONN_CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/2
       MODELIONN_REQUIRE_SIGNATURE_VERIFICATION: "true"
       MODELIONN_CORS_ORIGINS: ${CORS_ORIGINS:-https://your-domain.com}
+        healthcheck:
+          test: ["CMD-SHELL", "curl -f http://localhost:8000/health/ready || exit 1"]
+          interval: 15s
+          timeout: 5s
+          retries: 3
     depends_on:
       postgres:
         condition: service_healthy
@@ -70,6 +75,21 @@ services:
   redis:
     restart: unless-stopped
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --raw incr PING"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A registry.tasks inspect ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep -q '[c]elery.*beat' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   ipfs:
     restart: unless-stopped
