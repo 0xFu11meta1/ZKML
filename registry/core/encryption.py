@@ -6,8 +6,9 @@ Format: base64(version_byte || nonce || ciphertext || tag)
 
 from __future__ import annotations
 
-import base64
 import hashlib
+
+from registry.core.encoding import toBase64, fromBase64
 import hmac
 import os
 import struct
@@ -50,7 +51,7 @@ def encrypt_field(plaintext: str, master_key: str | bytes) -> str:
 
     # Pack: version (1 byte) || nonce (12 bytes) || ciphertext+tag
     payload = struct.pack("B", _VERSION) + nonce + ct_with_tag
-    return base64.b64encode(payload).decode()
+    return toBase64(payload)
 
 
 def decrypt_field(ciphertext_b64: str, master_key: str | bytes) -> str:
@@ -61,7 +62,7 @@ def decrypt_field(ciphertext_b64: str, master_key: str | bytes) -> str:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
     try:
-        payload = base64.b64decode(ciphertext_b64)
+        payload = fromBase64(ciphertext_b64)
     except Exception:
         raise ValueError("Invalid base64 encoding")
 
