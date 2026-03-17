@@ -3,18 +3,24 @@ security headers, request ID, and tenant context."""
 
 from __future__ import annotations
 
+import hashlib
 import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from registry.api.middleware.api_key_auth import APIKeyAuthMiddleware
 from registry.api.middleware.csrf import CSRFMiddleware
 from registry.api.middleware.request_id import RequestIDMiddleware, request_id_ctx
 from registry.api.middleware.request_size import RequestSizeLimitMiddleware
 from registry.api.middleware.security_headers import SecurityHeadersMiddleware
 from registry.api.middleware.tenant import TenantMiddleware, current_org_slug
+from registry.models.database import APIKeyRow
 
 
 # ---------------------------------------------------------------------------
@@ -200,3 +206,96 @@ class TestTenantMiddleware:
     async def test_org_slug_from_header(self, client: AsyncClient):
         resp = await client.get("/tenant", headers={"x-org-slug": "acme-corp"})
         assert resp.json()["slug"] == "acme-corp"
+
+
+# ── API Key Auth Middleware ────────────────────────────────
+
+def _make_api_key_app() -> FastAPI:
+    app = FastAPI()
+
+    @app.get("/protected")
+    async def _protected(request: Request):
+        return {"hotkey": getattr(request.state, "api_key_hotkey", "")}
+
+    app.add_middleware(APIKeyAuthMiddleware)
+    return app
+
+
+class TestAPIKeyAuthMiddleware:
+    @pytest.fixture()
+    async def client(self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch):
+        from registry.api.middleware import api_key_auth
+
+        @asynccontextmanager
+        async def _test_session():
+            yield db_session
+
+        monkeypatch.setattr(api_key_auth, "get_async_session", _test_session)
+
+        app = _make_api_key_app()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as c:
+            yield c
+
+    @staticmethod
+    async def _create_api_key_row(
+        db_session: AsyncSession,
+        *,
+        raw_key: str,
+        hotkey: str,
+        requests_today: int,
+        daily_limit: int,
+        expires_at: datetime | None,
+    ) -> None:
+        row = APIKeyRow(
+            key_hash=hashlib.sha256(raw_key.encode()).hexdigest(),
+            hotkey=hotkey,
+            label="test",
+            requests_today=requests_today,
+            daily_limit=daily_limit,
+            expires_at=expires_at,
+        )
+        db_session.add(row)
+        await db_session.commit()
+
+    async def test_rejects_expired_api_key(self, client: AsyncClient, db_session: AsyncSession):
+        raw_key = "mnn_expired_test_key"
+        await self._create_api_key_row(
+            db_session,
+            raw_key=raw_key,
+            hotkey="5FExpiredUserXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+            requests_today=0,
+            daily_limit=10,
+            expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+        )
+
+        resp = await client.get(
+            "/protected",
+            headers={"authorization": f"Bearer {raw_key}"},
+        )
+
+        assert resp.status_code == 401
+        assert resp.json()["detail"] == "API key has expired"
+
+    async def test_rejects_when_daily_limit_exceeded(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ):
+        raw_key = "mnn_limited_test_key"
+        await self._create_api_key_row(
+            db_session,
+            raw_key=raw_key,
+            hotkey="5FLimitedUserXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+            requests_today=1,
+            daily_limit=1,
+            expires_at=None,
+        )
+
+        resp = await client.get(
+            "/protected",
+            headers={"authorization": f"Bearer {raw_key}"},
+        )
+
+        assert resp.status_code == 429
+        assert resp.json()["detail"] == "Daily API key limit exceeded"
