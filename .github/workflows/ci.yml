@@ -157,7 +157,6 @@ jobs:
         if: always()
         run: docker compose down -v
 
-
   rust:
     runs-on: ubuntu-latest
     defaults:
