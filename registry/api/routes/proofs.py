@@ -167,9 +167,9 @@ async def request_proof(
     requester_hotkey: str = Depends(verify_publisher),
 ) -> dict:
     """Submit a proof generation request."""
-    # Verify circuit exists
+    # Verify circuit exists and is not soft-deleted
     circuit = (await db.execute(
-        select(CircuitRow).where(CircuitRow.id == body.circuit_id)
+        select(CircuitRow).where(CircuitRow.id == body.circuit_id, CircuitRow.deleted_at.is_(None))
     )).scalar_one_or_none()
     if not circuit:
         raise HTTPException(404, "Circuit not found")
@@ -273,9 +273,9 @@ async def request_proof_batch(
 
     for job_req in body.jobs[:remaining_slots]:
         try:
-            # Validate circuit
+            # Validate circuit (exclude soft-deleted)
             circuit = (await db.execute(
-                select(CircuitRow).where(CircuitRow.id == job_req.circuit_id)
+                select(CircuitRow).where(CircuitRow.id == job_req.circuit_id, CircuitRow.deleted_at.is_(None))
             )).scalar_one_or_none()
             if not circuit:
                 results.append({"status": "error", "circuit_id": job_req.circuit_id, "error": "Circuit not found"})
@@ -509,6 +509,15 @@ async def verify_proof(
     proof = (await db.execute(select(ProofRow).where(ProofRow.id == body.proof_id))).scalar_one_or_none()
     if not proof:
         raise HTTPException(404, "Proof not found")
+
+    # Validate proof format version is supported
+    _SUPPORTED_FORMAT_VERSIONS = {1}
+    if proof.format_version not in _SUPPORTED_FORMAT_VERSIONS:
+        raise HTTPException(
+            400,
+            f"Unsupported proof format version {proof.format_version}. "
+            f"Supported: {sorted(_SUPPORTED_FORMAT_VERSIONS)}",
+        )
 
     circuit = (await db.execute(select(CircuitRow).where(CircuitRow.id == proof.circuit_id))).scalar_one_or_none()
     if not circuit:

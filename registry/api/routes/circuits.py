@@ -125,7 +125,7 @@ async def upload_circuit(
     publisher_circuit_count = (await db.execute(
         select(func.count()).select_from(
             select(CircuitRow.id)
-            .where(CircuitRow.publisher_hotkey == publisher_hotkey)
+            .where(CircuitRow.publisher_hotkey == publisher_hotkey, CircuitRow.deleted_at.is_(None))
             .with_for_update()
             .subquery()
         )
@@ -147,7 +147,10 @@ async def upload_circuit(
 
     # Check duplicate (lock row to prevent TOCTOU race)
     existing = await db.execute(
-        select(CircuitRow).where(CircuitRow.circuit_hash == circuit_hash).with_for_update()
+        select(CircuitRow).where(
+            CircuitRow.circuit_hash == circuit_hash,
+            CircuitRow.deleted_at.is_(None),
+        ).with_for_update()
     )
     if existing.scalar_one_or_none():
         raise HTTPException(409, "Circuit with this hash already exists")
@@ -279,7 +282,7 @@ async def track_download(
     _download_counts[rate_key] = hits
     result = await db.execute(
         update(CircuitRow)
-        .where(CircuitRow.id == circuit_id)
+        .where(CircuitRow.id == circuit_id, CircuitRow.deleted_at.is_(None))
         .values(downloads=CircuitRow.downloads + 1)
     )
     if result.rowcount == 0:
