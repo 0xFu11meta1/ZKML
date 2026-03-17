@@ -35,34 +35,25 @@ export const webhookFormSchema = z.object({
     .url("Must be a valid URL")
     .startsWith("https://", "Webhook URL must use HTTPS")
     .max(2048, "URL too long"),
-  label: z
-    .string()
-    .min(1, "Label is required")
-    .max(256, "Label too long"),
+  label: z.string().min(1, "Label is required").max(256, "Label too long"),
   events: z
     .array(z.string())
     .min(1, "At least one event must be selected")
-    .refine(
-      (events) => {
-        const allowed = new Set([
-          "*",
-          "proof.completed",
-          "proof.failed",
-          "circuit.uploaded",
-          "prover.online",
-          "prover.offline",
-        ]);
-        return events.every((e) => allowed.has(e));
-      },
-      "Invalid event type selected",
-    ),
+    .refine((events) => {
+      const allowed = new Set([
+        "*",
+        "proof.completed",
+        "proof.failed",
+        "circuit.uploaded",
+        "prover.online",
+        "prover.offline",
+      ]);
+      return events.every((e) => allowed.has(e));
+    }, "Invalid event type selected"),
 });
 
 export const apiKeyFormSchema = z.object({
-  name: z
-    .string()
-    .min(1, "API key name is required")
-    .max(256, "Name too long"),
+  name: z.string().min(1, "API key name is required").max(256, "Name too long"),
   daily_limit: z
     .number()
     .int("Must be a whole number")
