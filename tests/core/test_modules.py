@@ -280,3 +280,93 @@ class TestSDKErrors:
         assert err.status_code == 418
         assert err.detail == "teapot"
         assert str(err) == "test"
+
+
+# ── Encoding helpers ──────────────────────────────────────────
+
+class TestEncodingHelpers:
+    def test_toBase64_from_bytes(self):
+        from registry.core.encoding import toBase64
+
+        result = toBase64(b"hello")
+        assert result == "aGVsbG8="
+        assert isinstance(result, str)
+
+    def test_toBase64_from_string(self):
+        from registry.core.encoding import toBase64
+
+        result = toBase64("hello")
+        assert result == "aGVsbG8="
+
+    def test_fromBase64_returns_bytes(self):
+        from registry.core.encoding import fromBase64
+
+        result = fromBase64("aGVsbG8=")
+        assert result == b"hello"
+        assert isinstance(result, bytes)
+
+    def test_roundtrip_bytes(self):
+        from registry.core.encoding import toBase64, fromBase64
+
+        original = b"sensitive-data-xyz"
+        encoded = toBase64(original)
+        decoded = fromBase64(encoded)
+        assert decoded == original
+
+    def test_roundtrip_string(self):
+        from registry.core.encoding import toBase64, fromBase64
+
+        original = "unicode-emoji-🎉"
+        encoded = toBase64(original)
+        decoded = fromBase64(encoded)
+        assert decoded.decode() == original
+
+    def test_fromBase64_invalid_input(self):
+        from registry.core.encoding import fromBase64
+
+        with pytest.raises(Exception):  # base64.b64decode raises binascii.Error
+            fromBase64("!!!not-valid-base64!!!")
+
+
+class TestEncodingIntegration:
+    def test_encryption_uses_shared_encoding_helpers(self):
+        """Verify encryption.py uses toBase64/fromBase64 helpers."""
+        from registry.core.encryption import encrypt_field, decrypt_field
+
+        key = "test-key-integration"
+        plaintext = "integration-test-data"
+
+        # encrypt_field should return base64-encoded string (via toBase64)
+        ciphertext = encrypt_field(plaintext, key)
+        assert isinstance(ciphertext, str)
+        assert ciphertext.isascii()  # Valid base64
+
+        # decrypt_field should decode via fromBase64 and decrypt correctly
+        decrypted = decrypt_field(ciphertext, key)
+        assert decrypted == plaintext
+
+    def test_encryption_roundtrip_with_binary_data(self):
+        """Test that encryption handles binary data correctly through encoding helpers."""
+        from registry.core.encryption import encrypt_field, decrypt_field
+        import json
+
+        key = "binary-test-key"
+        data = {"api_key": "sk_test_123", "secret": "abc123xyz"}
+        plaintext = json.dumps(data)
+
+        ciphertext = encrypt_field(plaintext, key)
+        decrypted = decrypt_field(ciphertext, key)
+        assert json.loads(decrypted) == data
+
+    def test_encoding_helpers_are_deterministic(self):
+        """Verify encoding is deterministic (same input → same output)."""
+        from registry.core.encoding import toBase64, fromBase64
+
+        data = b"deterministic-test"
+        encoded1 = toBase64(data)
+        encoded2 = toBase64(data)
+        assert encoded1 == encoded2
+
+        decoded1 = fromBase64(encoded1)
+        decoded2 = fromBase64(encoded1)
+        assert decoded1 == decoded2
