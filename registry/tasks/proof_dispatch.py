@@ -259,6 +259,20 @@ async def _dispatch_async(task, job_id: int, request_id: str | None = None) -> d
                 request_id or "",
             )
 
+            # Fire webhook for DISPATCHED transition
+            try:
+                from registry.tasks.webhook_delivery import fire_webhooks_for_job
+                await fire_webhooks_for_job(job.id, "proof.dispatched", {
+                    "job_id": job.id,
+                    "task_id": job.task_id,
+                    "circuit_id": circuit.id,
+                    "circuit_name": circuit.name,
+                    "num_partitions": num_partitions,
+                    "provers_assigned": len(provers),
+                })
+            except Exception as exc:
+                logger.debug("Webhook queueing for dispatch failed (non-critical): %s", exc)
+
             return {
                 "job_id": job_id,
                 "task_id": job.task_id,
