@@ -12,6 +12,7 @@ import {
   Building2,
   Search,
   Trophy,
+  ShieldCheck,
 } from "lucide-react";
 
 const navItems = [
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/proofs", label: "Proof Jobs", icon: Zap },
   { href: "/organizations", label: "Organizations", icon: Building2 },
   { href: "/search", label: "Search", icon: Search },
+  { href: "/admin", label: "Admin", icon: ShieldCheck },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
