@@ -29,6 +29,14 @@ docker compose exec worker celery -A registry.tasks.celery_app.app call registry
 1. Inspect webhook endpoint failures in worker logs.
 2. Disable repeatedly failing webhook configs.
 3. Notify affected tenant.
+4. Verify receiver-side HMAC validation (`X-Modelionn-Signature`) against payload body and shared secret.
+
+## ProofRequestFailureSpike
+
+1. Sample failed requests and capture `X-Request-ID` from API responses.
+2. Trace corresponding dispatch logs with `request_id=<id>` in worker logs.
+3. Separate validation errors (bad CID/missing verification key) from infrastructure failures.
+4. If validation errors dominate, notify API consumers and share remediation hints.
 
 ## DatabaseConnectionSaturation
 

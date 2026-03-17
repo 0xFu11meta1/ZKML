@@ -220,3 +220,19 @@ curl http://localhost:9093/api/v2/alerts
 - [ ] Add additional scrape targets if scaling to multiple registry instances
 - [ ] Set up Grafana alerting for dashboard-specific thresholds
 - [ ] Test alert routing: `curl -X POST http://localhost:9093/api/v2/alerts -d '[...]'`
+- [ ] Run release integrity checks before cutting releases: `python scripts/check_release_integrity.py`
+- [ ] Ensure production web builds never set `NEXT_PUBLIC_DEV_AUTH=true` (build now fails closed)
+
+---
+
+## 7. Trace Correlation (API -> Worker)
+
+Modelionn now propagates `X-Request-ID` from proof request APIs into proof dispatch task logs.
+
+Use this flow during incident response:
+
+1. Capture `X-Request-ID` from client response headers.
+2. Search API logs for the same request ID.
+3. Search worker logs for dispatch messages containing `request_id=<id>`.
+
+This allows end-to-end tracing of proof request enqueue and dispatch behavior.
