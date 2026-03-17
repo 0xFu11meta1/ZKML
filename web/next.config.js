@@ -1,4 +1,13 @@
 /** @type {import('next').NextConfig} */
+if (
+  process.env.NODE_ENV === "production" &&
+  process.env.NEXT_PUBLIC_DEV_AUTH === "true"
+) {
+  throw new Error(
+    "NEXT_PUBLIC_DEV_AUTH must never be enabled for production builds.",
+  );
+}
+
 const nextConfig = {
   output: "standalone",
   reactStrictMode: true,
