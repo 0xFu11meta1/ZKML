@@ -11,11 +11,13 @@ import {
   Settings,
   Building2,
   Search,
+  Trophy,
 } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/provers", label: "Prover Network", icon: Network },
+  { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { href: "/circuits", label: "Circuits", icon: Cpu },
   { href: "/proofs", label: "Proof Jobs", icon: Zap },
   { href: "/organizations", label: "Organizations", icon: Building2 },
