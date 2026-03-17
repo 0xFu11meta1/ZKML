@@ -5,6 +5,7 @@ import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { isDevelopmentAuth, signWithDevAuth } from "@/lib/auth-dev";
 
 function SignInPageContent() {
   const router = useRouter();
@@ -24,19 +25,22 @@ function SignInPageContent() {
     const nonce = Math.floor(Date.now() / 1000).toString();
 
     let signature: string;
-    if (process.env.NEXT_PUBLIC_DEV_AUTH === "true") {
-      // Dev-only fallback: sha256(hotkey:nonce) — MUST NOT be enabled in production builds.
-      const encoder = new TextEncoder();
-      const data = encoder.encode(`${hotkey}:${nonce}`);
-      const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-      signature = Array.from(new Uint8Array(hashBuffer))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
-    } else {
-      // Production: require real Bittensor wallet signing via browser extension
+    try {
+      if (isDevelopmentAuth()) {
+        // Development-only: SHA-256(hotkey:nonce) with runtime safety checks
+        signature = await signWithDevAuth(hotkey, nonce);
+      } else {
+        // Production: require real Bittensor wallet signing via browser extension
+        setLoading(false);
+        setError(
+          "Wallet signing required. Install the Bittensor wallet extension or enable NEXT_PUBLIC_DEV_AUTH for development.",
+        );
+        return;
+      }
+    } catch (err) {
       setLoading(false);
       setError(
-        "Wallet signing required. Install the Bittensor wallet extension or enable NEXT_PUBLIC_DEV_AUTH for development.",
+        err instanceof Error ? err.message : "Signing failed. Please try again.",
       );
       return;
     }

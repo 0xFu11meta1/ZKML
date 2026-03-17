@@ -25,9 +25,6 @@ export function useCreateApiKey() {
   return useMutation({
     mutationFn: api.createApiKey,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["api-keys"] }),
-    onError: (error: Error) => {
-      console.error("Create API key failed:", error.message);
-    },
   });
 }
 
@@ -36,9 +33,6 @@ export function useRevokeApiKey() {
   return useMutation({
     mutationFn: api.revokeApiKey,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["api-keys"] }),
-    onError: (error: Error) => {
-      console.error("Revoke API key failed:", error.message);
-    },
   });
 }
 
@@ -69,9 +63,6 @@ export function useUploadCircuit() {
   return useMutation({
     mutationFn: api.uploadCircuit,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["circuits"] }),
-    onError: (error: Error) => {
-      console.error("Upload circuit failed:", error.message);
-    },
   });
 }
 
@@ -113,9 +104,6 @@ export function useRequestProof() {
   return useMutation({
     mutationFn: api.requestProof,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["proofJobs"] }),
-    onError: (error: Error) => {
-      console.error("Request proof failed:", error.message);
-    },
   });
 }
 
@@ -135,9 +123,6 @@ export function useVerifyProof() {
   return useMutation({
     mutationFn: api.verifyProof,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["proofs"] }),
-    onError: (error: Error) => {
-      console.error("Verify proof failed:", error.message);
-    },
   });
 }
 
