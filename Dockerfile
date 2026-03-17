@@ -1,5 +1,5 @@
-# ── Stage 0: Rust prover build ───────────────────────────────
-FROM rust:1.78-slim-bookworm AS prover-builder
+# ── Stage 0: Rust prover dependency cache ────────────────────
+FROM rust:1.78-slim-bookworm AS prover-deps
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev cmake build-essential \
@@ -7,13 +7,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /prover
 COPY prover/Cargo.toml prover/Cargo.lock ./
+RUN mkdir -p src && printf 'fn main() {}\n' > src/lib.rs && cargo fetch
+
+# ── Stage 1: Rust prover build ───────────────────────────────
+FROM prover-deps AS prover-builder
+
+WORKDIR /prover
+COPY prover/Cargo.toml prover/Cargo.lock ./
 COPY prover/src/ src/
 
 # Build the prover library (release mode, default features only for base image)
-RUN cargo build --release --lib
+RUN cargo build --release --lib --all-features
 # The compiled .so will be at /prover/target/release/libmodelio_prover.so
 
-# ── Stage 1: Python backend ──────────────────────────────────
+# ── Stage 2: Python backend ──────────────────────────────────
 FROM python:3.11-slim AS backend
 
 WORKDIR /app
@@ -29,10 +36,10 @@ RUN pip install --no-cache-dir .
 
 # Copy compiled Rust prover library (optional — non-GPU builds may skip)
 RUN --mount=from=prover-builder,source=/prover/target/release,target=/tmp/prover-build \
-    cp /tmp/prover-build/*.so /usr/local/lib/ 2>/dev/null || echo "No prover .so found — continuing without native prover"; \
+    install -m 755 /tmp/prover-build/libmodelionn_prover.so /usr/local/lib/libmodelionn_prover.so && \
     ldconfig
 
-# ── Stage 2: Frontend build (optional, for standalone) ───────
+# ── Stage 3: Frontend build (optional, for standalone) ───────
 FROM node:20-alpine AS frontend
 
 WORKDIR /web
@@ -42,7 +49,7 @@ COPY web/ .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-# ── Stage 3: Final image ────────────────────────────────────
+# ── Stage 4: Final image ────────────────────────────────────
 FROM python:3.11-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
@@ -55,9 +62,9 @@ COPY --from=backend /usr/local/lib/python3.11/site-packages /usr/local/lib/pytho
 COPY --from=backend /usr/local/bin/uvicorn /usr/local/bin/celery /usr/local/bin/
 COPY --from=backend /app /app
 
-# Copy Rust prover shared library if available
+# Copy Rust prover shared library
 RUN --mount=from=backend,source=/usr/local/lib,target=/tmp/backend-lib \
-    cp /tmp/backend-lib/*.so /usr/local/lib/ 2>/dev/null || echo "No prover .so — continuing without native prover"; \
+    install -m 755 /tmp/backend-lib/libmodelionn_prover.so /usr/local/lib/libmodelionn_prover.so && \
     ldconfig
 
 COPY docker/entrypoint.sh /app/entrypoint.sh
