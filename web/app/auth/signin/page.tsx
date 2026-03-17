@@ -40,7 +40,9 @@ function SignInPageContent() {
     } catch (err) {
       setLoading(false);
       setError(
-        err instanceof Error ? err.message : "Signing failed. Please try again.",
+        err instanceof Error
+          ? err.message
+          : "Signing failed. Please try again.",
       );
       return;
     }

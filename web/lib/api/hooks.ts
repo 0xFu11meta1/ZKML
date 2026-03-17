@@ -1,6 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import { makeQueryKey, makePaginatedKey, makeSingleKey } from "@/lib/query-keys";
+import {
+  makeQueryKey,
+  makePaginatedKey,
+  makeSingleKey,
+} from "@/lib/query-keys";
 
 // ── Health ──────────────────────────────────────────────────
 

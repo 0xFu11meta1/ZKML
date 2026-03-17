@@ -1,19 +1,22 @@
 /**
  * Development-only authentication helper.
- * 
+ *
  * This module provides unsafe SHA-256 signing for local development and testing.
  * It MUST NEVER be used in production. The build process should ensure this module
  * is only loaded in development environments.
- * 
+ *
  * In production, always require real Bittensor wallet signing via the browser extension.
  */
 
-export async function signWithDevAuth(hotkey: string, nonce: string): Promise<string> {
+export async function signWithDevAuth(
+  hotkey: string,
+  nonce: string,
+): Promise<string> {
   // Runtime guard: fail loudly in production
   if (process.env.NODE_ENV === "production") {
     throw new Error(
       "Development authentication is not available in production. " +
-      "Use the Bittensor wallet extension for real signing.",
+        "Use the Bittensor wallet extension for real signing.",
     );
   }
 
@@ -26,5 +29,8 @@ export async function signWithDevAuth(hotkey: string, nonce: string): Promise<st
 }
 
 export const isDevelopmentAuth = () => {
-  return process.env.NEXT_PUBLIC_DEV_AUTH === "true" && process.env.NODE_ENV !== "production";
+  return (
+    process.env.NEXT_PUBLIC_DEV_AUTH === "true" &&
+    process.env.NODE_ENV !== "production"
+  );
 };
