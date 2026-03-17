@@ -6,8 +6,6 @@ Lifecycle: QUEUED → PARTITIONING → DISPATCHED → PROVING → AGGREGATING �
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import json
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -15,6 +13,8 @@ from datetime import datetime, timezone
 from registry.tasks.celery_app import app
 
 logger = logging.getLogger(__name__)
+
+_DISPATCH_LOCK_TTL_SECONDS = 600
 
 
 def _build_cumulative_weights(scores: list[float]) -> list[float]:
@@ -43,17 +43,60 @@ def _pick_weighted_index(index: int, cumulative_weights: list[float]) -> int:
     return len(cumulative_weights) - 1
 
 
+def _dispatch_lock_key(job_id: int) -> str:
+    return f"dispatch_job_{job_id}"
+
+
+async def _get_dispatch_redis_client():
+    from registry.core.cache import cache
+
+    if cache and hasattr(cache, "_redis") and cache._redis:
+        return cache._redis
+    return None
+
+
+async def _acquire_dispatch_lock(job_id: int) -> tuple[object | None, str, str | None, bool]:
+    redis_client = await _get_dispatch_redis_client()
+    lock_key = _dispatch_lock_key(job_id)
+    lock_token: str | None = None
+
+    if not redis_client:
+        return None, lock_key, lock_token, True
+
+    lock_token = str(uuid.uuid4())
+    acquired = await redis_client.set(
+        lock_key,
+        lock_token,
+        nx=True,
+        ex=_DISPATCH_LOCK_TTL_SECONDS,
+    )
+    return redis_client, lock_key, lock_token, bool(acquired)
+
+
+async def _release_dispatch_lock(redis_client, lock_key: str, lock_token: str | None) -> None:
+    if not redis_client or not lock_token:
+        return
+
+    try:
+        current_token = await redis_client.get(lock_key)
+        if current_token == lock_token:
+            await redis_client.delete(lock_key)
+    except Exception:
+        logger.warning("Failed to release dispatch lock for key %s", lock_key, exc_info=True)
+
+
+def _should_skip_dispatch(job) -> bool:
+    from registry.models.database import ProofJobStatus
+
+    return job.status != ProofJobStatus.QUEUED
+
+
 @app.task(bind=True, name="registry.tasks.proof_dispatch.dispatch_proof_job", max_retries=2, soft_time_limit=300, time_limit=360)
 def dispatch_proof_job(self, job_id: int) -> dict:
-    """Main proof dispatch task — partitions circuit and routes to provers.
-
-    This runs synchronously in a Celery worker. It updates the DB
-    at each stage of the pipeline.
-    """
+    """Main proof dispatch task that partitions a circuit and routes it to provers."""
     try:
-        return asyncio.run(_dispatch_async(self, job_id))
+        return asyncio.run(_dispatch_with_lock(self, job_id))
     except Exception as exc:
-        # Handle soft time limit exceeded — mark job as failed
         try:
             asyncio.run(_timeout_job(job_id, str(exc)))
         except Exception as timeout_exc:
@@ -61,18 +104,34 @@ def dispatch_proof_job(self, job_id: int) -> dict:
         raise
 
 
+async def _dispatch_with_lock(task, job_id: int) -> dict:
+    redis_client, lock_key, lock_token, acquired = await _acquire_dispatch_lock(job_id)
+    if not acquired:
+        logger.info("Proof job %d dispatch already in progress", job_id)
+        return {"status": "skipped_idempotent", "job_id": job_id}
+
+    try:
+        result = await _dispatch_async(task, job_id)
+        if result.get("status") != "dispatched":
+            await _release_dispatch_lock(redis_client, lock_key, lock_token)
+        return result
+    except Exception:
+        await _release_dispatch_lock(redis_client, lock_key, lock_token)
+        raise
+
+
 async def _timeout_job(job_id: int, error: str) -> None:
     """Mark a job as timed out when dispatch exceeds time limit."""
     from sqlalchemy import select
     from registry.core.deps import async_session
-    from registry.models.database import ProofJobRow, ProofJobStatus
+    from registry.models.database import ProofJobRow, ProofJobStatus, set_proof_job_status
 
     async with async_session() as db:
         job = (await db.execute(
             select(ProofJobRow).where(ProofJobRow.id == job_id)
         )).scalar_one_or_none()
         if job and job.status not in (ProofJobStatus.COMPLETED, ProofJobStatus.FAILED, ProofJobStatus.TIMEOUT):
-            job.status = ProofJobStatus.FAILED
+            set_proof_job_status(job, ProofJobStatus.FAILED)
             job.error = f"Dispatch timed out: {error[:500]}"
             job.completed_at = datetime.now(timezone.utc)
             await db.commit()
@@ -80,11 +139,11 @@ async def _timeout_job(job_id: int, error: str) -> None:
 
 async def _dispatch_async(task, job_id: int) -> dict:
     """Async inner dispatch logic."""
-    from sqlalchemy import select, update
+    from sqlalchemy import select
     from registry.core.deps import async_session
     from registry.models.database import (
         ProofJobRow, ProofJobStatus, CircuitRow,
-        CircuitPartitionRow, ProofRow, ProverCapabilityRow,
+        CircuitPartitionRow, ProverCapabilityRow, set_proof_job_status,
     )
     from registry.core.config import settings
 
@@ -97,6 +156,15 @@ async def _dispatch_async(task, job_id: int) -> dict:
             logger.error("Proof job %d not found", job_id)
             return {"error": "job not found"}
 
+        if _should_skip_dispatch(job):
+            logger.info("Proof job %d already in status %s; skipping duplicate dispatch", job_id, job.status)
+            return {
+                "job_id": job_id,
+                "task_id": job.task_id,
+                "status": str(job.status),
+                "skipped": True,
+            }
+
         circuit = (await db.execute(
             select(CircuitRow).where(CircuitRow.id == job.circuit_id)
         )).scalar_one_or_none()
@@ -106,7 +174,7 @@ async def _dispatch_async(task, job_id: int) -> dict:
 
         try:
             # 1. PARTITIONING
-            job.status = ProofJobStatus.PARTITIONING
+            set_proof_job_status(job, ProofJobStatus.PARTITIONING)
             job.started_at = datetime.now(timezone.utc)
             await db.commit()
 
@@ -135,7 +203,7 @@ async def _dispatch_async(task, job_id: int) -> dict:
             await db.commit()
 
             # 2. DISPATCHED — assign to online provers
-            job.status = ProofJobStatus.DISPATCHED
+            set_proof_job_status(job, ProofJobStatus.DISPATCHED)
             await db.commit()
 
             # Find available provers
@@ -170,7 +238,7 @@ async def _dispatch_async(task, job_id: int) -> dict:
             await db.commit()
 
             # 3. PROVING — in production, this triggers miner requests via Bittensor
-            job.status = ProofJobStatus.PROVING
+            set_proof_job_status(job, ProofJobStatus.PROVING)
             await db.commit()
 
             # The actual proving happens via the subnet:
@@ -198,8 +266,9 @@ async def _dispatch_async(task, job_id: int) -> dict:
 
 async def _fail_job(db, job, error: str) -> None:
     """Mark a job as failed."""
-    from registry.models.database import ProofJobStatus
-    job.status = ProofJobStatus.FAILED
+    from registry.models.database import ProofJobStatus, set_proof_job_status
+
+    set_proof_job_status(job, ProofJobStatus.FAILED)
     job.error = error[:2000]  # Truncate to avoid oversized error messages
     job.completed_at = datetime.now(timezone.utc)
     await db.commit()
@@ -213,10 +282,10 @@ def complete_proof_job(job_id: int, proof_data_cid: str, proof_hash: str) -> dic
 
 async def _complete_async(job_id: int, proof_data_cid: str, proof_hash: str) -> dict:
     import re as _re
-    from sqlalchemy import select, update
+    from sqlalchemy import select
     from registry.core.deps import async_session
     from registry.models.database import (
-        ProofJobRow, ProofJobStatus, ProofRow, CircuitRow, CircuitPartitionRow,
+        ProofJobRow, ProofJobStatus, ProofRow, CircuitRow, set_proof_job_status,
     )
 
     if not _re.match(r'^[a-f0-9]{64}$', proof_hash):
@@ -256,7 +325,10 @@ async def _complete_async(job_id: int, proof_data_cid: str, proof_hash: str) -> 
         await db.flush()
 
         # Update job
-        job.status = ProofJobStatus.COMPLETED
+        if job.status != ProofJobStatus.VERIFYING:
+            set_proof_job_status(job, ProofJobStatus.VERIFYING)
+        set_proof_job_status(job, ProofJobStatus.COMPLETED)
+        job.partitions_completed = job.num_partitions
         job.result_proof_id = proof.id
         job.actual_time_ms = actual_ms
         job.completed_at = now

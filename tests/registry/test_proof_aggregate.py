@@ -75,6 +75,16 @@ class TestFragmentAggregation:
 class TestPartitionCounting:
     """The sweep checks partition statuses to decide next action."""
 
+    def test_partition_progress_is_persisted_from_counts(self):
+        from types import SimpleNamespace
+
+        from registry.models.database import update_partitions_completed
+
+        job = SimpleNamespace(num_partitions=4, partitions_completed=0)
+        update_partitions_completed(job, {"completed": 2, "proving": 2})
+
+        assert job.partitions_completed == 2
+
     def test_all_completed(self):
         part_counts = {"completed": 4}
         completed = part_counts.get("completed", 0)

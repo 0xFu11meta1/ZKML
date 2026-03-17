@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+from types import SimpleNamespace
+
 
 class _Partition:
     def __init__(self) -> None:
@@ -33,6 +36,43 @@ def test_pick_weighted_index_is_stable():
     weights = [0.5, 1.0]
     picks = [_pick_weighted_index(i, weights) for i in range(20)]
     assert all(p in (0, 1) for p in picks)
+
+
+def test_should_skip_dispatch_only_for_non_queued_jobs():
+    from registry.models.database import ProofJobStatus
+    from registry.tasks.proof_dispatch import _should_skip_dispatch
+
+    assert _should_skip_dispatch(SimpleNamespace(status=ProofJobStatus.QUEUED)) is False
+    assert _should_skip_dispatch(SimpleNamespace(status=ProofJobStatus.PROVING)) is True
+
+
+def test_dispatch_lock_key_uses_job_id():
+    from registry.tasks.proof_dispatch import _dispatch_lock_key
+
+    assert _dispatch_lock_key(42) == "dispatch_job_42"
+
+
+def test_release_dispatch_lock_deletes_only_when_token_matches():
+    from registry.tasks.proof_dispatch import _release_dispatch_lock
+
+    class _Redis:
+        def __init__(self, current_token: str):
+            self.current_token = current_token
+            self.deleted_keys: list[str] = []
+
+        async def get(self, key: str) -> str:
+            return self.current_token
+
+        async def delete(self, key: str) -> None:
+            self.deleted_keys.append(key)
+
+    matching = _Redis("token-1")
+    asyncio.run(_release_dispatch_lock(matching, "dispatch_job_1", "token-1"))
+    assert matching.deleted_keys == ["dispatch_job_1"]
+
+    non_matching = _Redis("token-2")
+    asyncio.run(_release_dispatch_lock(non_matching, "dispatch_job_1", "token-1"))
+    assert non_matching.deleted_keys == []
 
 
 def test_reset_timeout_partitions_clears_assignment():

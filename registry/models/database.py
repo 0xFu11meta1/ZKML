@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import enum
+from collections.abc import Mapping
 from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text, func
@@ -90,6 +91,33 @@ def validate_status_transition(current: ProofJobStatus | str, target: ProofJobSt
     if isinstance(target, str):
         target = ProofJobStatus(target)
     return target in VALID_TRANSITIONS.get(current, set())
+
+
+def coerce_proof_job_status(status: ProofJobStatus | str) -> ProofJobStatus:
+    """Normalize string or enum status values to ProofJobStatus."""
+    if isinstance(status, ProofJobStatus):
+        return status
+    return ProofJobStatus(status)
+
+
+def set_proof_job_status(job: object, target: ProofJobStatus | str) -> ProofJobStatus:
+    """Apply a validated status transition to a proof job-like object."""
+    current = coerce_proof_job_status(getattr(job, "status"))
+    next_status = coerce_proof_job_status(target)
+    if current != next_status and not validate_status_transition(current, next_status):
+        raise ValueError(f"Invalid proof job status transition: {current.value} -> {next_status.value}")
+    setattr(job, "status", next_status)
+    return next_status
+
+
+def update_partitions_completed(job: object, partition_counts: Mapping[str, int]) -> int:
+    """Persist completed partition count derived from partition status counts."""
+    completed = max(0, int(partition_counts.get("completed", 0)))
+    expected = max(0, int(getattr(job, "num_partitions", 0) or 0))
+    if expected:
+        completed = min(completed, expected)
+    setattr(job, "partitions_completed", completed)
+    return completed
 
 
 class GpuBackendEnum(str, enum.Enum):

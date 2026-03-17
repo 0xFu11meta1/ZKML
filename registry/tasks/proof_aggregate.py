@@ -67,6 +67,7 @@ async def _aggregate_sweep(task) -> dict:
     from registry.core.deps import async_session
     from registry.models.database import (
         ProofJobRow, ProofJobStatus, CircuitPartitionRow,
+        set_proof_job_status, update_partitions_completed,
     )
 
     async with async_session() as db:
@@ -104,7 +105,8 @@ async def _aggregate_sweep(task) -> dict:
                 ).scalars().all()
                 reset_count = _reset_timeout_partitions(reset_candidates)
 
-                job.status = ProofJobStatus.TIMEOUT
+                update_partitions_completed(job, {"completed": 0})
+                set_proof_job_status(job, ProofJobStatus.TIMEOUT)
                 job.error = f"Proving timed out after {int(elapsed)}s (limit: {max_proving_seconds}s)"
                 job.completed_at = datetime.now(timezone.utc)
                 timed_out += 1
@@ -143,6 +145,7 @@ async def _aggregate_sweep(task) -> dict:
                 ).all()
             )
             completed = part_counts.get("completed", 0)
+            update_partitions_completed(job, part_counts)
             total = sum(part_counts.values())
 
             if total == 0:
@@ -153,7 +156,7 @@ async def _aggregate_sweep(task) -> dict:
                 failed = part_counts.get("failed", 0)
                 pending_or_active = total - completed - failed
                 if pending_or_active == 0 and completed < job.num_partitions:
-                    job.status = ProofJobStatus.FAILED
+                    set_proof_job_status(job, ProofJobStatus.FAILED)
                     job.error = f"Only {completed}/{job.num_partitions} partitions completed, rest failed"
                     job.completed_at = datetime.now(timezone.utc)
                     try:
@@ -176,7 +179,7 @@ async def _aggregate_sweep(task) -> dict:
                 aggregated += 1
             except Exception as exc:
                 logger.error("Aggregation failed for job %d: %s", job.id, exc, exc_info=True)
-                job.status = ProofJobStatus.FAILED
+                set_proof_job_status(job, ProofJobStatus.FAILED)
                 job.error = f"Aggregation error: {str(exc)[:500]}"
                 job.completed_at = datetime.now(timezone.utc)
 
@@ -190,11 +193,11 @@ async def _aggregate_job(db, job) -> None:
     from sqlalchemy import select
     from registry.models.database import (
         CircuitPartitionRow, CircuitRow, ProofRow,
-        ProofJobStatus,
+        ProofJobStatus, set_proof_job_status,
     )
 
     # 1. AGGREGATING — lock partitions to prevent concurrent modification
-    job.status = ProofJobStatus.AGGREGATING
+    set_proof_job_status(job, ProofJobStatus.AGGREGATING)
     await db.flush()
 
     partitions = (
@@ -293,7 +296,7 @@ async def _aggregate_job(db, job) -> None:
     proof_data_cid = upload_result.cid
 
     # 2. VERIFYING
-    job.status = ProofJobStatus.VERIFYING
+    set_proof_job_status(job, ProofJobStatus.VERIFYING)
     await db.flush()
 
     verified = False
@@ -367,7 +370,8 @@ async def _aggregate_job(db, job) -> None:
     db.add(proof)
     await db.flush()
 
-    job.status = ProofJobStatus.COMPLETED
+    set_proof_job_status(job, ProofJobStatus.COMPLETED)
+    job.partitions_completed = job.num_partitions
     job.result_proof_id = proof.id
     job.actual_time_ms = actual_ms
     job.completed_at = now

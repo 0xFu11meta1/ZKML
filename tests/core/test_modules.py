@@ -217,6 +217,32 @@ class TestDatabaseModels:
         assert "failed" in values
         assert "timeout" in values
 
+    def test_validate_status_transition(self):
+        from registry.models.database import ProofJobStatus, validate_status_transition
+
+        assert validate_status_transition(ProofJobStatus.QUEUED, ProofJobStatus.PARTITIONING) is True
+        assert validate_status_transition(ProofJobStatus.COMPLETED, ProofJobStatus.PROVING) is False
+
+    def test_set_proof_job_status_rejects_invalid_transition(self):
+        from types import SimpleNamespace
+
+        from registry.models.database import ProofJobStatus, set_proof_job_status
+
+        job = SimpleNamespace(status=ProofJobStatus.COMPLETED)
+        with pytest.raises(ValueError, match="Invalid proof job status transition"):
+            set_proof_job_status(job, ProofJobStatus.PROVING)
+
+    def test_update_partitions_completed_clamps_to_expected_total(self):
+        from types import SimpleNamespace
+
+        from registry.models.database import update_partitions_completed
+
+        job = SimpleNamespace(num_partitions=3, partitions_completed=0)
+        completed = update_partitions_completed(job, {"completed": 5, "failed": 1})
+
+        assert completed == 3
+        assert job.partitions_completed == 3
+
     def test_gpu_backend_enum(self):
         from registry.models.database import GpuBackendEnum
 
