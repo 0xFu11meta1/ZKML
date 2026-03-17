@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/components/ui/toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ import {
   useDeleteWebhook,
 } from "@/lib/api";
 import type { ApiKey, Webhook } from "@/lib/api/client";
+import { webhookFormSchema, apiKeyFormSchema } from "@/lib/validation";
 import { Key, Plus, Trash2, Copy, Shield, Bell, Power } from "lucide-react";
 import { timeAgo } from "@/lib/utils";
 
@@ -31,6 +33,7 @@ const WEBHOOK_EVENTS = [
 export default function SettingsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { toast } = useToast();
   const { data: apiKeys, isLoading } = useApiKeys();
   const createKey = useCreateApiKey();
   const revokeKey = useRevokeApiKey();
@@ -39,6 +42,7 @@ export default function SettingsPage() {
   const [newKeyLimit, setNewKeyLimit] = useState(1000);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [apiKeyErrors, setApiKeyErrors] = useState<{ [key: string]: string }>({});
 
   // Webhook state
   const { data: webhooks, isLoading: webhooksLoading } = useWebhooks();
@@ -50,6 +54,7 @@ export default function SettingsPage() {
   const [webhookLabel, setWebhookLabel] = useState("");
   const [webhookEvents, setWebhookEvents] = useState<string[]>(["*"]);
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
+  const [webhookErrors, setWebhookErrors] = useState<{ [key: string]: string }>({});
 
   if (status === "loading") return null;
   if (status === "unauthenticated") {
@@ -58,6 +63,23 @@ export default function SettingsPage() {
   }
 
   const handleCreate = async () => {
+    // Validate
+    const validation = apiKeyFormSchema.safeParse({
+      name: newKeyLabel,
+      daily_limit: newKeyLimit,
+    });
+
+    if (!validation.success) {
+      const errors: { [key: string]: string } = {};
+      validation.error.issues.forEach((issue) => {
+        const path = issue.path.join(".");
+        errors[path] = issue.message;
+      });
+      setApiKeyErrors(errors);
+      return;
+    }
+
+    setApiKeyErrors({});
     const result = await createKey.mutateAsync({
       name: newKeyLabel,
       daily_limit: newKeyLimit,
@@ -66,6 +88,7 @@ export default function SettingsPage() {
     setShowForm(false);
     setNewKeyLabel("");
     setNewKeyLimit(1000);
+    toast("API key created successfully", "success");
   };
 
   const handleRevoke = async (id: number) => {
@@ -78,6 +101,24 @@ export default function SettingsPage() {
   };
 
   const handleCreateWebhook = async () => {
+    // Validate
+    const validation = webhookFormSchema.safeParse({
+      url: webhookUrl,
+      label: webhookLabel,
+      events: webhookEvents,
+    });
+
+    if (!validation.success) {
+      const errors: { [key: string]: string } = {};
+      validation.error.issues.forEach((issue) => {
+        const path = issue.path.join(".");
+        errors[path] = issue.message;
+      });
+      setWebhookErrors(errors);
+      return;
+    }
+
+    setWebhookErrors({});
     const result = await createWebhook.mutateAsync({
       url: webhookUrl,
       label: webhookLabel,
@@ -88,6 +129,7 @@ export default function SettingsPage() {
     setWebhookUrl("");
     setWebhookLabel("");
     setWebhookEvents(["*"]);
+    toast("Webhook created successfully", "success");
   };
 
   const handleDeleteWebhook = async (id: number) => {
@@ -192,8 +234,11 @@ export default function SettingsPage() {
                   onChange={(e) => setNewKeyLabel(e.target.value)}
                   placeholder="e.g. CI pipeline"
                   className="w-full rounded-md border px-3 py-1.5 text-sm"
-                  maxLength={128}
+                  maxLength={256}
                 />
+                              {apiKeyErrors.name && (
+                                <p className="text-xs text-red-500 mt-1">{apiKeyErrors.name}</p>
+                              )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">
@@ -208,8 +253,11 @@ export default function SettingsPage() {
                     )
                   }
                   min={1}
-                  max={100000}
+                  max={1000000}
                   className="w-32 rounded-md border px-3 py-1.5 text-sm"
+                                {apiKeyErrors.daily_limit && (
+                                  <p className="text-xs text-red-500 mt-1">{apiKeyErrors.daily_limit}</p>
+                                )}
                 />
               </div>
               <Button
@@ -330,6 +378,9 @@ export default function SettingsPage() {
                   placeholder="https://example.com/webhook"
                   className="w-full rounded-md border px-3 py-1.5 text-sm"
                   maxLength={2048}
+                                {webhookErrors.url && (
+                                  <p className="text-xs text-red-500 mt-1">{webhookErrors.url}</p>
+                                )}
                 />
               </div>
               <div>
@@ -340,7 +391,10 @@ export default function SettingsPage() {
                   onChange={(e) => setWebhookLabel(e.target.value)}
                   placeholder="e.g. Slack notifications"
                   className="w-full rounded-md border px-3 py-1.5 text-sm"
-                  maxLength={128}
+                  maxLength={256}
+                                {webhookErrors.label && (
+                                  <p className="text-xs text-red-500 mt-1">{webhookErrors.label}</p>
+                                )}
                 />
               </div>
               <div>
@@ -359,15 +413,16 @@ export default function SettingsPage() {
                     >
                       {evt.label}
                     </button>
+                                  {webhookErrors.events && (
+                                    <p className="text-xs text-red-500 mt-1">{webhookErrors.events}</p>
+                                  )}
                   ))}
                 </div>
               </div>
               <Button
                 size="sm"
                 onClick={handleCreateWebhook}
-                disabled={
-                  createWebhook.isPending || !webhookUrl.startsWith("https://")
-                }
+                disabled={createWebhook.isPending}
               >
                 {createWebhook.isPending ? "Creating…" : "Create"}
               </Button>
