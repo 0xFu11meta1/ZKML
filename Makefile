@@ -1,4 +1,4 @@
-.PHONY: run test test-fast lint typecheck docker-up docker-down deploy-preflight benchmark-proof build-web clean web-lint web-typecheck web-test ci
+.PHONY: run test test-fast lint typecheck docker-up docker-down deploy-preflight benchmark-proof build-web clean web-lint web-typecheck web-test ci db-reset dev-shell docker-cleanup docker-rebuild
 
 # ── Development ────────────────────────────────────────────
 
@@ -83,3 +83,23 @@ clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
 	rm -rf .mypy_cache .ruff_cache htmlcov .coverage
+
+# ── Convenience ────────────────────────────────────────────
+
+db-reset:
+	alembic downgrade base
+	alembic upgrade head
+	@echo "Database reset to latest schema"
+
+dev-shell:
+	docker compose exec registry bash
+
+docker-cleanup:
+	docker compose down -v --remove-orphans
+	docker image prune -f
+	@echo "Cleaned up containers, volumes, and dangling images"
+
+docker-rebuild:
+	docker compose build --no-cache
+	docker compose up -d
+	@echo "Rebuilt and restarted all services"
