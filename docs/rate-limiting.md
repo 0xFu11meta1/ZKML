@@ -14,11 +14,11 @@ Request → RateLimitMiddleware
 
 All settings are via environment variables prefixed with `MODELIONN_`:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MODELIONN_RATE_LIMIT_PER_MINUTE` | `60` | Max requests per client per minute |
-| `MODELIONN_RATE_LIMIT_BURST` | `10` | Extra burst allowance above the per-minute rate |
-| `MODELIONN_TRUSTED_PROXIES` | `""` | Comma-separated CIDR blocks for proxy trust (e.g., `10.0.0.0/8,172.16.0.0/12`) |
+| Variable                          | Default | Description                                                                    |
+| --------------------------------- | ------- | ------------------------------------------------------------------------------ |
+| `MODELIONN_RATE_LIMIT_PER_MINUTE` | `60`    | Max requests per client per minute                                             |
+| `MODELIONN_RATE_LIMIT_BURST`      | `10`    | Extra burst allowance above the per-minute rate                                |
+| `MODELIONN_TRUSTED_PROXIES`       | `""`    | Comma-separated CIDR blocks for proxy trust (e.g., `10.0.0.0/8,172.16.0.0/12`) |
 
 ## Exempt Paths
 
@@ -84,8 +84,8 @@ done
 
 ## Troubleshooting
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| All requests get 429 | Redis down + accumulated in-memory state | Restart API server or fix Redis |
-| Legitimate users blocked | Rate too low for traffic pattern | Increase `RATE_LIMIT_PER_MINUTE` |
-| 429 only in tests | Cross-test state leakage | Ensure `_reset_rate_limiter` autouse fixture runs |
+| Symptom                  | Cause                                    | Fix                                               |
+| ------------------------ | ---------------------------------------- | ------------------------------------------------- |
+| All requests get 429     | Redis down + accumulated in-memory state | Restart API server or fix Redis                   |
+| Legitimate users blocked | Rate too low for traffic pattern         | Increase `RATE_LIMIT_PER_MINUTE`                  |
+| 429 only in tests        | Cross-test state leakage                 | Ensure `_reset_rate_limiter` autouse fixture runs |

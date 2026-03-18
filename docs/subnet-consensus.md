@@ -20,12 +20,12 @@ Validators                    Miners (Provers)
 
 Each validator scores miners on four axes with configurable weights:
 
-| Criterion | Weight | Description |
-|-----------|--------|-------------|
-| `proof_quality` | 0.40 | Proof correctness, verification time, fragment integrity |
-| `speed_score` | 0.25 | Actual proof time vs. estimated time |
-| `availability` | 0.20 | `uptime_ratio` × response rate |
-| `stake_alignment` | 0.15 | Higher stake = more skin in the game |
+| Criterion         | Weight | Description                                              |
+| ----------------- | ------ | -------------------------------------------------------- |
+| `proof_quality`   | 0.40   | Proof correctness, verification time, fragment integrity |
+| `speed_score`     | 0.25   | Actual proof time vs. estimated time                     |
+| `availability`    | 0.20   | `uptime_ratio` × response rate                           |
+| `stake_alignment` | 0.15   | Higher stake = more skin in the game                     |
 
 ### Composite Score
 
@@ -43,11 +43,13 @@ score = (
 Before a miner can receive work, it must pass:
 
 ### GPU Benchmark Gate
+
 - Minimum benchmark score threshold.
 - Prevents CPU-only nodes from bidding on GPU work.
 - Configured via `ConsensusEngine` initialization.
 
 ### Stake Gate
+
 - Minimum TAO stake requirement.
 - Evaluated at the consensus layer during weight-setting.
 
@@ -61,12 +63,12 @@ The `ConsensusEngine` class (`subnet/consensus/engine.py`) orchestrates:
 
 ### Configuration
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `scoring_weights` | See table above | Criterion weights (must sum to 1.0) |
-| `min_benchmark_score` | `10.0` | GPU benchmark gate threshold |
-| `ema_alpha` | `0.1` | EMA smoothing factor |
-| `weight_set_interval` | `100` (blocks) | How often validators set weights |
+| Setting               | Default         | Description                         |
+| --------------------- | --------------- | ----------------------------------- |
+| `scoring_weights`     | See table above | Criterion weights (must sum to 1.0) |
+| `min_benchmark_score` | `10.0`          | GPU benchmark gate threshold        |
+| `ema_alpha`           | `0.1`           | EMA smoothing factor                |
+| `weight_set_interval` | `100` (blocks)  | How often validators set weights    |
 
 ## Reward Distribution
 
@@ -85,26 +87,26 @@ Rewards flow through Bittensor's native mechanism:
 
 ## Validator Responsibilities
 
-| Task | Frequency | Code Path |
-|------|-----------|-----------|
-| Forward proof requests | On demand | `subnet/neurons/validator.py:forward()` |
-| Score proof responses | Per response | `subnet/reward/scoring.py` |
-| Set on-chain weights | Every 100 blocks | `ConsensusEngine.set_weights()` |
-| Monitor miner health | Every 60s | `registry/tasks/prover_health.py` |
+| Task                   | Frequency        | Code Path                               |
+| ---------------------- | ---------------- | --------------------------------------- |
+| Forward proof requests | On demand        | `subnet/neurons/validator.py:forward()` |
+| Score proof responses  | Per response     | `subnet/reward/scoring.py`              |
+| Set on-chain weights   | Every 100 blocks | `ConsensusEngine.set_weights()`         |
+| Monitor miner health   | Every 60s        | `registry/tasks/prover_health.py`       |
 
 ## Miner Responsibilities
 
-| Task | Frequency | Code Path |
-|------|-----------|-----------|
-| Handle proof requests | On demand | `subnet/neurons/miner.py:handle_proof_request()` |
-| Report capabilities | On registration | `subnet/base/miner_base.py:register_capabilities()` |
-| Heartbeat pings | Every 30s | Miner axon → Validator |
+| Task                  | Frequency       | Code Path                                           |
+| --------------------- | --------------- | --------------------------------------------------- |
+| Handle proof requests | On demand       | `subnet/neurons/miner.py:handle_proof_request()`    |
+| Report capabilities   | On registration | `subnet/base/miner_base.py:register_capabilities()` |
+| Heartbeat pings       | Every 30s       | Miner axon → Validator                              |
 
 ## Troubleshooting
 
-| Issue | Diagnosis | Resolution |
-|-------|-----------|-----------|
-| Miner receives no work | Check `benchmark_score` and `online` status | Ensure GPU benchmark passes the gate |
-| Low rewards | Check `uptime_ratio` and `successful_proofs / total_proofs` | Improve hardware reliability |
-| Validator not setting weights | Check `subtensor` connection and wallet permissions | Verify coldkey/hotkey registration |
-| Score discrepancies | Enable debug logging in `ConsensusEngine` | Compare local scores vs. on-chain weights |
+| Issue                         | Diagnosis                                                   | Resolution                                |
+| ----------------------------- | ----------------------------------------------------------- | ----------------------------------------- |
+| Miner receives no work        | Check `benchmark_score` and `online` status                 | Ensure GPU benchmark passes the gate      |
+| Low rewards                   | Check `uptime_ratio` and `successful_proofs / total_proofs` | Improve hardware reliability              |
+| Validator not setting weights | Check `subtensor` connection and wallet permissions         | Verify coldkey/hotkey registration        |
+| Score discrepancies           | Enable debug logging in `ConsensusEngine`                   | Compare local scores vs. on-chain weights |

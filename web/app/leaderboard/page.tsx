@@ -145,9 +145,7 @@ export default function LeaderboardPage() {
                     <th className="px-4 py-3 font-medium text-right">
                       Success Rate
                     </th>
-                    <th className="px-4 py-3 font-medium text-right">
-                      Uptime
-                    </th>
+                    <th className="px-4 py-3 font-medium text-right">Uptime</th>
                     <th className="px-4 py-3 font-medium">Status</th>
                   </tr>
                 </thead>
@@ -191,8 +189,8 @@ export default function LeaderboardPage() {
                               successRate >= 95
                                 ? "text-green-600"
                                 : successRate >= 80
-                                ? "text-yellow-600"
-                                : "text-red-500"
+                                  ? "text-yellow-600"
+                                  : "text-red-500"
                             }
                           >
                             {successRate.toFixed(1)}%
@@ -202,9 +200,7 @@ export default function LeaderboardPage() {
                           {(p.uptime_ratio * 100).toFixed(1)}%
                         </td>
                         <td className="px-4 py-3">
-                          <Badge
-                            variant={p.online ? "success" : "destructive"}
-                          >
+                          <Badge variant={p.online ? "success" : "destructive"}>
                             {p.online ? "Online" : "Offline"}
                           </Badge>
                         </td>

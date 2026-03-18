@@ -37,35 +37,39 @@ prover/
 The prover is built with [maturin](https://www.maturin.rs/) which compiles the Rust code and creates a Python wheel.
 
 ### Prerequisites
+
 - Rust 1.70+ (install via `rustup`)
 - Python 3.10+
 - maturin 1.4+ (`pip install maturin`)
 
 ### Development Build
+
 ```bash
 cd prover
 maturin develop --features "groth16,plonk"
 ```
 
 ### Release Build
+
 ```bash
 maturin build --release --features "groth16,plonk,halo2,stark,cuda"
 ```
 
 ### Feature Flags
 
-| Feature | Default | Description |
-|---------|---------|-------------|
-| `groth16` | ✅ | Arkworks BN254 pairing-based proofs |
-| `plonk` | ✅ | KZG commitment with custom gates |
-| `halo2` | ✅ | IPA commitments, recursive composition |
-| `stark` | ✅ | Winterfell FRI polynomial IOP |
-| `cuda` | ❌ | ICICLE NVIDIA GPU acceleration |
-| `metal` | ❌ | Apple Silicon compute shaders |
-| `webgpu` | ❌ | Cross-platform GPU via wgpu |
-| `python` | ❌ | Build PyO3 bindings (enabled by maturin) |
+| Feature   | Default | Description                              |
+| --------- | ------- | ---------------------------------------- |
+| `groth16` | ✅      | Arkworks BN254 pairing-based proofs      |
+| `plonk`   | ✅      | KZG commitment with custom gates         |
+| `halo2`   | ✅      | IPA commitments, recursive composition   |
+| `stark`   | ✅      | Winterfell FRI polynomial IOP            |
+| `cuda`    | ❌      | ICICLE NVIDIA GPU acceleration           |
+| `metal`   | ❌      | Apple Silicon compute shaders            |
+| `webgpu`  | ❌      | Cross-platform GPU via wgpu              |
+| `python`  | ❌      | Build PyO3 bindings (enabled by maturin) |
 
 Enable GPU features for your platform:
+
 ```bash
 # NVIDIA
 maturin develop --features "groth16,plonk,cuda"
@@ -82,21 +86,25 @@ maturin develop --features "groth16,plonk,webgpu"
 ## Core Types
 
 ### ProofSystem
+
 ```rust
 pub enum ProofSystem { Groth16, Plonk, Halo2, Stark }
 ```
 
 ### CircuitType
+
 ```rust
 pub enum CircuitType { General, Evm, ZkMl, Custom }
 ```
 
 ### GpuBackendType
+
 ```rust
 pub enum GpuBackendType { Cuda, Rocm, Metal, WebGpu, Cpu }
 ```
 
 ### Circuit
+
 ```rust
 pub struct Circuit {
     id: String,
@@ -113,6 +121,7 @@ pub struct Circuit {
 ```
 
 ### Witness / Proof
+
 ```rust
 pub struct Witness {
     assignments: Vec<u8>,
@@ -158,6 +167,7 @@ impl ProverEngine {
 `select_backend()` chooses the appropriate `ProverBackend` based on the circuit's proof system and the GPU preference.
 
 ### ProverBackend Trait
+
 ```rust
 #[async_trait]
 pub trait ProverBackend: Send + Sync {
@@ -189,12 +199,13 @@ impl GpuManager {
 
 ### Backend-specific acceleration
 
-| Backend | CUDA | Metal | ROCm | WebGPU |
-|---------|------|-------|------|--------|
-| MSM | ICICLE BN254 kernel | Bucket accumulation (16-bit windows) | HIP bucket method | Compute shader |
-| NTT | ICICLE kernel | Cooley-Tukey butterfly | rocFFT-alike | Compute shader |
+| Backend | CUDA                | Metal                                | ROCm              | WebGPU         |
+| ------- | ------------------- | ------------------------------------ | ----------------- | -------------- |
+| MSM     | ICICLE BN254 kernel | Bucket accumulation (16-bit windows) | HIP bucket method | Compute shader |
+| NTT     | ICICLE kernel       | Cooley-Tukey butterfly               | rocFFT-alike      | Compute shader |
 
 Detection is automatic:
+
 - **CUDA**: `icicle_cuda_runtime::device::get_device_count()` or `nvidia-smi` fallback
 - **Metal**: `system_profiler SPDisplaysDataType --json`
 - **ROCm**: `rocm-smi --showproductname --showmeminfo vram`
@@ -237,23 +248,23 @@ pub fn aggregate_fragments(
 
 Aggregation strategy depends on the proof system:
 
-| System | Strategy |
-|--------|----------|
+| System      | Strategy                                                                                                   |
+| ----------- | ---------------------------------------------------------------------------------------------------------- |
 | **Groth16** | SnarkPack-style linear combination — Fiat-Shamir random scalars combine A/B/C points, single pairing check |
-| **PLONK** | Batched KZG opening — combine opening proofs with Fiat-Shamir γ scalars |
-| **Halo2** | Recursive IPA accumulator — verifier circuit folds each fragment |
-| **STARK** | FRI layer merging — combine Merkle roots and decommitment paths |
+| **PLONK**   | Batched KZG opening — combine opening proofs with Fiat-Shamir γ scalars                                    |
+| **Halo2**   | Recursive IPA accumulator — verifier circuit folds each fragment                                           |
+| **STARK**   | FRI layer merging — combine Merkle roots and decommitment paths                                            |
 
 ---
 
 ## Proof System Comparison
 
-| System | Curve | Setup | Proof Size | Verify Cost | Post-Quantum |
-|--------|-------|-------|-----------|-------------|-------------|
-| Groth16 | BN254 | Trusted ceremony | ~192 B | O(1) pairing | No |
-| PLONK | BN254 | Universal SRS | ~10 KiB | O(1) pairings | No |
-| Halo2 | Pasta | None | ~15 KiB | O(log n) | No |
-| STARK | None | None (transparent) | ~100 KiB | O(log² n) FRI | Yes |
+| System  | Curve | Setup              | Proof Size | Verify Cost   | Post-Quantum |
+| ------- | ----- | ------------------ | ---------- | ------------- | ------------ |
+| Groth16 | BN254 | Trusted ceremony   | ~192 B     | O(1) pairing  | No           |
+| PLONK   | BN254 | Universal SRS      | ~10 KiB    | O(1) pairings | No           |
+| Halo2   | Pasta | None               | ~15 KiB    | O(log n)      | No           |
+| STARK   | None  | None (transparent) | ~100 KiB   | O(log² n) FRI | Yes          |
 
 ---
 
@@ -307,6 +318,7 @@ for dev in engine.gpu_devices():
 ```
 
 ### gpu_preference values
+
 `"cuda"`, `"rocm"`, `"metal"`, `"webgpu"`, `"cpu"`, or `None` (auto-select).
 
 ---
@@ -326,6 +338,7 @@ for dev in engine.gpu_devices():
 ## Testing
 
 ### Rust tests
+
 ```bash
 cd prover
 cargo test                           # All tests
@@ -334,10 +347,12 @@ cargo test --features "groth16,cuda" # With GPU
 ```
 
 ### Environment variables
+
 - `RUST_LOG=debug` — Verbose logging
 - `MODELIONN_GPU_BACKEND=cpu` — Force CPU fallback
 
 ### Running from Python
+
 ```bash
 cd prover
 maturin develop
@@ -359,6 +374,7 @@ strip = true
 ```
 
 ### Tips
+
 - Use `cuda` feature on NVIDIA hardware for 10× MSM speedup
 - Set `max_constraints_per_partition` to match available VRAM (1M constraints ≈ 4 GB)
 - Increase `redundancy` in `create_partition_plan` for fault tolerance (default: 1)

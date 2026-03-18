@@ -19,11 +19,11 @@ Every webhook delivery wraps the event data in a standard envelope:
 
 ### HTTP Headers
 
-| Header | Description |
-|--------|-------------|
-| `Content-Type` | `application/json` |
+| Header                  | Description                                                                   |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| `Content-Type`          | `application/json`                                                            |
 | `X-Modelionn-Signature` | `sha256=<hex-digest>` — HMAC-SHA256 of the raw body using your webhook secret |
-| `X-Modelionn-Event` | Event type string (e.g. `proof.completed`) |
+| `X-Modelionn-Event`     | Event type string (e.g. `proof.completed`)                                    |
 
 ### Verifying Signatures
 
@@ -152,6 +152,7 @@ Fired when a prover fails to heartbeat within the eviction window.
 ## Managing Webhooks
 
 ### CLI
+
 ```bash
 # Create
 modelionn webhooks create \
@@ -170,6 +171,7 @@ modelionn webhooks delete 42
 ```
 
 ### API
+
 ```
 POST   /webhooks          Create webhook
 GET    /webhooks          List webhooks
@@ -182,18 +184,22 @@ DELETE /webhooks/{id}     Delete webhook
 ## Reliability
 
 ### Retry Policy
+
 Failed deliveries are retried up to **3 times** with exponential backoff (10s, 20s, 40s, max 60s).
 
 ### Circuit Breaker
+
 After **5 consecutive failures**, the webhook is automatically disabled and logged to the dead-letter queue (DLQ). The circuit breaker opens for 5 minutes.
 
 - Distributed state is stored in Redis (`cb:failures:{id}`, `cb:open:{id}`)
 - Falls back to in-process tracking if Redis is unavailable
 
 ### Dead-Letter Queue
+
 Permanently failed deliveries are logged to `modelionn.webhook.dlq` at ERROR level. Operators can replay them by parsing the DLQ log entries.
 
 ### Timeouts
+
 Each delivery attempt has a **10-second timeout**. Ensure your endpoint responds within this window.
 
 ---
@@ -202,11 +208,11 @@ Each delivery attempt has a **10-second timeout**. Ensure your endpoint responds
 
 Use the `events` field when creating a webhook:
 
-| Value | Description |
-|-------|-------------|
-| `*` | All events |
-| `proof.completed` | Only completed proofs |
+| Value                          | Description                       |
+| ------------------------------ | --------------------------------- |
+| `*`                            | All events                        |
+| `proof.completed`              | Only completed proofs             |
 | `proof.completed,proof.failed` | Multiple events (comma-separated) |
-| `circuit.uploaded` | Only circuit uploads |
+| `circuit.uploaded`             | Only circuit uploads              |
 
 Allowed event types: `*`, `proof.completed`, `proof.failed`, `proof.dispatched`, `circuit.uploaded`, `prover.online`, `prover.offline`.

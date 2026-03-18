@@ -112,9 +112,8 @@ describe("SearchPage", () => {
     renderWithProviders(<SearchPage />);
 
     const links = screen.getAllByRole("link");
-    const circuitLinks = links.filter(
-      (l) =>
-        l.getAttribute("href")?.startsWith("/circuits/"),
+    const circuitLinks = links.filter((l) =>
+      l.getAttribute("href")?.startsWith("/circuits/"),
     );
     expect(circuitLinks.length).toBe(2);
     expect(circuitLinks[0]).toHaveAttribute("href", "/circuits/1");
@@ -139,9 +138,7 @@ describe("SearchPage", () => {
 
     renderWithProviders(<SearchPage />);
     // Check for "No circuits match" fallback
-    expect(
-      screen.getByText(/No circuits match/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/No circuits match/)).toBeInTheDocument();
   });
 
   it("shows no circuits match message when results are empty", () => {

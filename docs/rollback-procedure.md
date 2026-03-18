@@ -52,11 +52,11 @@ alembic downgrade 0012_add_composite_indexes
 
 ### Migration Rollback Risks
 
-| Risk | Mitigation |
-|------|-----------|
+| Risk                           | Mitigation                                 |
+| ------------------------------ | ------------------------------------------ |
 | Data loss from dropped columns | Always use `nullable=True` for new columns |
-| FK constraint violations | Check dependent tables before dropping |
-| Index drops under load | Schedule during low-traffic window |
+| FK constraint violations       | Check dependent tables before dropping     |
+| Index drops under load         | Schedule during low-traffic window         |
 
 ## Rolling Back Celery Workers
 

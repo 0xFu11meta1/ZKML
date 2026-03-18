@@ -69,7 +69,9 @@ describe("LeaderboardPage", () => {
   it("shows skeleton when loading", () => {
     mockProvers.mockReturnValue({ data: undefined, isLoading: true });
     const { container } = renderWithProviders(<LeaderboardPage />);
-    expect(container.querySelectorAll('[class*="animate-pulse"]').length).toBeGreaterThan(0);
+    expect(
+      container.querySelectorAll('[class*="animate-pulse"]').length,
+    ).toBeGreaterThan(0);
   });
 
   it("ranks provers by benchmark score", () => {

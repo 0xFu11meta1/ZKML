@@ -33,10 +33,8 @@ export default function AdminPage() {
     page: 1,
   });
 
-  const onlineProvers =
-    provers?.items.filter((p) => p.online).length ?? 0;
-  const offlineProvers =
-    (provers?.items.length ?? 0) - onlineProvers;
+  const onlineProvers = provers?.items.filter((p) => p.online).length ?? 0;
+  const offlineProvers = (provers?.items.length ?? 0) - onlineProvers;
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -127,8 +125,8 @@ export default function AdminPage() {
                               job.status === "completed"
                                 ? "success"
                                 : job.status === "failed"
-                                ? "destructive"
-                                : "secondary"
+                                  ? "destructive"
+                                  : "secondary"
                             }
                           >
                             {job.status}

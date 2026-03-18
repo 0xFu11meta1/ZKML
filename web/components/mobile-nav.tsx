@@ -91,7 +91,9 @@ export function MobileNav({
           {/* Footer */}
           <div className="border-t border-gray-200 dark:border-gray-700 p-4">
             <p className="text-xs text-gray-400">Modelionn v0.2.0</p>
-            <p className="text-xs text-gray-400">ZK Prover Network on Bittensor</p>
+            <p className="text-xs text-gray-400">
+              ZK Prover Network on Bittensor
+            </p>
           </div>
         </Dialog.Content>
       </Dialog.Portal>

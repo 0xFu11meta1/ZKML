@@ -90,9 +90,9 @@ describe("webhookFormSchema", () => {
   });
 
   it("rejects empty events", () => {
-    expect(
-      webhookFormSchema.safeParse({ ...valid, events: [] }).success,
-    ).toBe(false);
+    expect(webhookFormSchema.safeParse({ ...valid, events: [] }).success).toBe(
+      false,
+    );
   });
 
   it("rejects invalid event type", () => {
@@ -130,8 +130,8 @@ describe("searchFormSchema", () => {
   });
 
   it("rejects overly long query", () => {
-    expect(
-      searchFormSchema.safeParse({ query: "x".repeat(300) }).success,
-    ).toBe(false);
+    expect(searchFormSchema.safeParse({ query: "x".repeat(300) }).success).toBe(
+      false,
+    );
   });
 });

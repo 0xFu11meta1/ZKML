@@ -9,7 +9,12 @@ jest.mock("@/lib/api", () => ({
   useProvers: jest.fn(),
 }));
 
-import { useHealth, useNetworkStats, useProofJobs, useProvers } from "@/lib/api";
+import {
+  useHealth,
+  useNetworkStats,
+  useProofJobs,
+  useProvers,
+} from "@/lib/api";
 
 const mockHealth = useHealth as jest.Mock;
 const mockStats = useNetworkStats as jest.Mock;
@@ -18,7 +23,13 @@ const mockProvers = useProvers as jest.Mock;
 
 beforeEach(() => {
   mockHealth.mockReturnValue({
-    data: { status: "ok", version: "0.3.0", database: "ok", cache: "ok", network: "mainnet" },
+    data: {
+      status: "ok",
+      version: "0.3.0",
+      database: "ok",
+      cache: "ok",
+      network: "mainnet",
+    },
     isLoading: false,
   });
   mockStats.mockReturnValue({
@@ -64,7 +75,9 @@ describe("AdminPage", () => {
     mockHealth.mockReturnValue({ data: undefined, isLoading: true });
     mockStats.mockReturnValue({ data: undefined, isLoading: true });
     const { container } = renderWithProviders(<AdminPage />);
-    expect(container.querySelectorAll('[class*="animate-pulse"]').length).toBeGreaterThan(0);
+    expect(
+      container.querySelectorAll('[class*="animate-pulse"]').length,
+    ).toBeGreaterThan(0);
   });
 
   it("displays prover overview", () => {

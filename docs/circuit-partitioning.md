@@ -25,10 +25,10 @@ constraints_per = ceil(circuit.num_constraints / num_partitions)
 
 ### Configuration
 
-| Setting | Default | Description |
-|---------|---------|-------------|
+| Setting                         | Default | Description                  |
+| ------------------------------- | ------- | ---------------------------- |
 | `max_constraints_per_partition` | `32768` | Max constraints per fragment |
-| `max_partitions_per_job` | `256` | Hard cap on partition count |
+| `max_partitions_per_job`        | `256`   | Hard cap on partition count  |
 
 ## Prover Assignment
 
@@ -62,6 +62,7 @@ commitment_hash = SHA256(circuit_hash || partition_index || constraint_start || 
 ## Fragment Completion
 
 When a partition completes:
+
 1. Prover submits the proof fragment CID via the subnet protocol.
 2. The validator verifies the fragment against the commitment hash.
 3. `CircuitPartitionRow.status` transitions: `pending → assigned → proving → completed`.
@@ -69,12 +70,12 @@ When a partition completes:
 
 ## Performance Considerations
 
-| Circuit Size | Partitions | Typical Time | GPU Recommendation |
-|-------------|-----------|-------------|-------------------|
-| < 32K constraints | 1 | < 10s | Any GPU |
-| 32K - 256K | 2-8 | 10-60s | RTX 3080+ |
-| 256K - 1M | 8-32 | 1-5m | RTX 4090 / A100 |
-| > 1M constraints | 32-256 | 5-30m | Multi-GPU cluster |
+| Circuit Size      | Partitions | Typical Time | GPU Recommendation |
+| ----------------- | ---------- | ------------ | ------------------ |
+| < 32K constraints | 1          | < 10s        | Any GPU            |
+| 32K - 256K        | 2-8        | 10-60s       | RTX 3080+          |
+| 256K - 1M         | 8-32       | 1-5m         | RTX 4090 / A100    |
+| > 1M constraints  | 32-256     | 5-30m        | Multi-GPU cluster  |
 
 ## Tuning
 
@@ -85,6 +86,7 @@ When a partition completes:
 ## Failure Handling
 
 If a partition fails:
+
 - The job status transitions to `FAILED`.
 - Error details are recorded in `CircuitPartitionRow.error`.
 - Webhook event `proof.failed` fires.

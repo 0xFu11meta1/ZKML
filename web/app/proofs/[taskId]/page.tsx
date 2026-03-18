@@ -36,7 +36,9 @@ export default function ProofDetailPage() {
   // SSE: real-time updates while job is in progress
   const isTerminal =
     job?.status && ["completed", "failed", "timeout"].includes(job.status);
-  const { job: sseJob, isConnected: sseConnected } = useProofJobSSE(!isTerminal ? taskId : undefined);
+  const { job: sseJob, isConnected: sseConnected } = useProofJobSSE(
+    !isTerminal ? taskId : undefined,
+  );
 
   if (isLoading) {
     return (

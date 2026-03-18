@@ -34,7 +34,8 @@ services:
       MODELIONN_REQUIRE_SIGNATURE_VERIFICATION: "true"
       MODELIONN_CORS_ORIGINS: ${CORS_ORIGINS:-https://your-domain.com}
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health/ready || exit 1"]
+      test:
+        ["CMD-SHELL", "curl -f http://localhost:8000/health/ready || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -86,7 +87,11 @@ services:
     restart: unless-stopped
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD:?Set REDIS_PASSWORD} ping | grep -q PONG"]
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -a ${REDIS_PASSWORD:?Set REDIS_PASSWORD} ping | grep -q PONG",
+        ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -169,7 +174,11 @@ services:
           /bin/sh /scripts/backup.sh /backups || echo "Backup failed with exit code $$?"
         done
     healthcheck:
-      test: ["CMD-SHELL", "find /backups -name 'pg_*.dump' -mmin -1500 | grep -q . || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "find /backups -name 'pg_*.dump' -mmin -1500 | grep -q . || exit 1",
+        ]
       interval: 60s
       timeout: 10s
       retries: 1

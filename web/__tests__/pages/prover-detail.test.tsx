@@ -59,9 +59,7 @@ describe("ProverDetailPage", () => {
     mockProver.mockReturnValue(sampleProver);
     renderWithProviders(<ProverDetailPage />);
     expect(
-      screen.getByText(
-        "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
-      ),
+      screen.getByText("5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y"),
     ).toBeInTheDocument();
   });
 
