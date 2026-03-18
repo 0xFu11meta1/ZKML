@@ -51,7 +51,7 @@ jobs:
         run: mypy registry subnet sdk cli --ignore-missing-imports
 
       - name: Run tests
-        run: pytest tests/ -v --tb=short --cov=registry --cov=sdk --cov=cli --cov-report=xml
+        run: pytest tests/ -v --tb=short --cov=registry --cov=sdk --cov=cli --cov-report=xml --cov-fail-under=70
 
       - name: Upload coverage
         if: matrix.python-version == '3.12'
@@ -129,6 +129,26 @@ jobs:
       - name: Stop services
         if: always()
         run: docker compose down -v
+
+  image-scan:
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t modelionn:scan .
+
+      - name: Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: modelionn:scan
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          format: table
+
   benchmark:
     runs-on: ubuntu-latest
     needs: test

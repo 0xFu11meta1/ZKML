@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,7 @@ from registry.core.deps import get_db
 from registry.core.security import verify_publisher
 from registry.models.database import WebhookConfigRow
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 MAX_WEBHOOKS_PER_USER = 10
@@ -209,3 +211,36 @@ async def delete_webhook(
         raise HTTPException(status_code=404, detail="Webhook not found")
     await db.delete(row)
     await db.commit()
+
+
+# ── Alertmanager receiver ──────────────────────────────────────
+
+
+@router.post("/alerts", status_code=200)
+async def receive_alertmanager_alerts(request: Request) -> dict:
+    """Receive alert payloads from Alertmanager.
+
+    This is an internal endpoint expected to be called only by the
+    Alertmanager sidecar within the Docker network.  It logs alerts
+    rather than forwarding them (see docs/alert-runbooks.md for
+    routing to Slack/PagerDuty).
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON payload")
+
+    alerts = payload.get("alerts", []) if isinstance(payload, dict) else []
+    for alert in alerts:
+        labels = alert.get("labels", {})
+        annotations = alert.get("annotations", {})
+        alert_status = alert.get("status", "unknown")
+        logger.warning(
+            "Alertmanager [%s] %s: %s (severity=%s)",
+            alert_status,
+            labels.get("alertname", "unknown"),
+            annotations.get("summary", annotations.get("description", "")),
+            labels.get("severity", "unknown"),
+        )
+
+    return {"status": "ok", "alerts_received": len(alerts)}
