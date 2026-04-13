@@ -13,7 +13,7 @@ authors = [{ name = "ZKML Contributors" }]
 
 dependencies = [
     "fastapi>=0.110,<1",
-    "uvicorn[standard]>=0.27,<1",
+    "uvicorn[standard]>=0.44.0,<1",
     "sqlalchemy>=2.0,<3",
     "alembic>=1.13,<2",
     "pydantic>=2.6,<3",
