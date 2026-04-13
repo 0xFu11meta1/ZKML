@@ -27,7 +27,7 @@ dependencies = [
     "cryptography>=42.0,<44",
     "redis>=5.0,<6",
     "celery>=5.4,<6",
-    "tenacity>=8.2,<10",
+    "tenacity>=9.1.4,<10",
     "asyncpg>=0.29,<1",
 ]
 
